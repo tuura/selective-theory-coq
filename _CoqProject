@@ -1,0 +1,10 @@
+-R src/ Hask
+src/Prelude.v
+src/Ltac.v
+src/Data/Functor.v
+src/Data/Functor/Contravariant.v
+src/Data/Functor/Const.v
+src/Control/Applicative.v
+src/Data/Either.v
+src/Data/Monoid.v
+src/Control/Selective.v
