@@ -118,6 +118,7 @@ Proof.
     + destruct z.
       * destruct s.
         -- simpl. unfold Select_ap.
+Admitted.
 
 Theorem select_selective_law3_assoc
   {A B C : Type} {F : Type -> Type} `{Functor F}
