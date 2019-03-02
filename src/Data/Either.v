@@ -22,6 +22,12 @@ Definition mapLeft `(f : a -> c) `(x : a + b) : c + b :=
   | inr r => inr r
   end.
 
+Definition mapRight `(f : b -> c) `(x : a + b) : a + c :=
+  match x with
+  | inl l => inl l
+  | inr r => inr (f r)
+  end.
+
 Definition Either_map {E X Y} (f : X -> Y) (x : Either E X) : Either E Y :=
   match x with
   | Left e   => Left e
