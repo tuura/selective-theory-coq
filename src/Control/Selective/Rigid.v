@@ -7,11 +7,28 @@ Require Import Control.Applicative.
 Require Import Control.Selective.
 (* Require Import Data.Over. *)
 Require Import Coq.Strings.String.
+Require Import Coq.Setoids.Setoid.
+Require Import Coq.Classes.Morphisms.
+Require Import Classes.Morphisms_Prop.
+Require Import FunctionalExtensionality.
 
+Generalizable All Variables.
+(* Functors preserve extensional equality for the applied function.
+   This is needed to perform setoid rewriting within the function
+   passed to a functor. *)
+Add Parametric Morphism {A B} `{Functor F} : (@fmap F _ A B)
+  with signature (pointwise_relation _ eq ==> eq ==> eq)
+    as mul_isomorphism.
+Proof.
+  intros.
+  f_equal.
+  extensionality e.
+  apply H0.
+Qed.
 
 Inductive Select (f : Type -> Type) (a : Type) :=
     Pure   : a -> Select f a
-  | MkSelect : forall b, Select f (Either b a) -> f (b -> a) -> Select f a.
+  | MkSelect : forall b, Select f (b + a) -> f (b -> a) -> Select f a.
 
 Arguments Pure {f} {a}.
 Arguments MkSelect {f} {a} {b}.
@@ -28,6 +45,80 @@ Program Instance Select_Functor (F : Type -> Type)
   fmap := fun _ _ f x => Select_map f x
 }.
 
+Definition id_f {A : Type} (x : A) := x.
+
+Lemma id_x_is_x {A : Type}:
+  forall (x : A), id x = x.
+Proof.
+  intros x. reflexivity.
+Qed.
+
+Lemma compose_id {A B : Type}:
+  forall (f : A -> B), (compose f id) = f.
+Proof.
+  intros f.
+  extensionality x.
+  unfold compose.
+  rewrite id_x_is_x.
+  reflexivity.
+Qed.
+
+Lemma Either_map_id {E X : Type} : Either_map (E:=E) (@id X) = id.
+Proof.
+  extensionality x.
+  destruct x;
+  reflexivity.
+Qed.
+
+Lemma Either_map_comp {E A B C : Type} :
+  forall (f : B -> C) (g : A -> B),
+  Either_map (E:= E) f \o Either_map g = Either_map (f \o g).
+Proof.
+  intros f g.
+  extensionality x.
+  destruct x; reflexivity.
+Qed.
+
+Import FunctorLaws.
+
+(* Lemma Select_Either_map_commute {E A B : Type} `{Functor F} : *)
+(*   forall (x : Select F (E + A)) (f : A -> B), *)
+(*   Select_map (Either_map f) x = Either_map (Select_map f) x. *)
+
+(* Select_map (Either_map f) (Select_map (Either_map g) XX) = *)
+(*   Select_map (Either_map (f \o g)) XX *)
+
+Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
+(* Theorem Select_Functor_law1 {A : Type} *)
+(*         `{Functor F} `{FunctorLaws F} : *)
+(*   forall (x : Select F A), fmap id x = id x. *)
+Obligation 1.
+unfold id.
+extensionality XX.
+induction XX.
+- reflexivity.
+- simpl.
+  f_equal.
+  * rewrite Either_map_id.
+    apply IHXX.
+  * setoid_rewrite compose_id. (* rewrite under the fun binder *)
+    rewrite fmap_id.
+    reflexivity.
+Qed.
+(* Theorem Select_Functor_law2 {A B C : Type} *)
+(*         `{Functor F} `{FunctorLaws F} : *)
+(*   forall (f : B -> C) (g : A -> B) (x : Select F A), *)
+(*   ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x. *)
+Obligation 2.
+extensionality XX.
+induction XX.
+- reflexivity.
+- simpl.
+  f_equal.
+  * simpl in IHXX.
+    rewrite <- Either_map_comp.
+Admitted.
+
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
 
@@ -40,9 +131,22 @@ Definition law3_h  {A B C : Type}
   fun p => match p with
            | pair x y => f x y
            end.
-(* ?O(n)? select implementation *) 
-Fixpoint Select_select_go {A B C : Type} {F : Type -> Type} `{Functor F}
-         (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) : Select F B :=
+
+(* Fixpoint Select_select_old {A B : Type} {F : Type -> Type} `{FF : Functor F} *)
+(*          (x : Select F (B + A)) (f : Select F (B -> A)) {struct f} : Select F A := *)
+(*   match f with *)
+(*   | Pure y                    => either y id <$> x *)
+(*   | MkSelect y z => *)
+(*     MkSelect (Select_select_old (Select_map law3_f x) *)
+(*                                 (law3_g <$> y)) *)
+(*              (law3_h <$> z) *)
+(*   end. *)
+
+
+(* ?O(n)? select implementation *)
+Fixpoint Select_select_go {A B C : Type} `{Functor F}
+         (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) {struct s} :
+         Select F B :=
   match s with
   | Pure y => either (k y) id <$> x
   | MkSelect y z =>
@@ -53,9 +157,15 @@ Fixpoint Select_select_go {A B C : Type} {F : Type -> Type} `{Functor F}
              (compose law3_h (compose k) <$> z)
   end.
 
-Fixpoint Select_select  {A B : Type} {F : Type -> Type} `{Functor F}
-         (x : Select F (B + A)) (f : Select F (B -> A)) {struct f} : Select F A :=
+Fixpoint Select_select  {A B : Type} `{Functor F}
+         (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A :=
   Select_select_go x f id.
+
+    (* select x (Select y z) = Select (select (f <$> x) (g <$> y)) (h <$> z) *)
+    (*   where *)
+    (*     f x = Right <$> x *)
+    (*     g y = \a -> bimap (,a) ($a) y *)
+    (*     h z = uncurry z *)
 
 Definition Select_ap {A B : Type} {F : Type -> Type} `{Functor F}
            (t : Select F (A -> B)) (x : Select F A) : Select F B :=
@@ -100,6 +210,10 @@ Theorem select_selective_law2_distr
   (z : Select F (A -> B)) :
   pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z).
 Proof.
+  simpl pure.
+  destruct x.
+  - induction y.
+  
   (* destruct x. *)
   (* - simpl. *)
   (*   destruct y. *)
@@ -117,8 +231,8 @@ Proof.
       destruct x; simpl; reflexivity.
     + destruct z.
       * destruct s.
-        -- simpl. unfold Select_ap.
-Admitted.
+        -- 
+        
 
 Theorem select_selective_law3_assoc
   {A B C : Type} {F : Type -> Type} `{Functor F}

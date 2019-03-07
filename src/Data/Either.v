@@ -34,6 +34,20 @@ Definition Either_map {E X Y} (f : X -> Y) (x : Either E X) : Either E Y :=
   | Right x' => Right (f x')
   end.
 
+Lemma id_x_is_x {A : Type}:
+  forall (x : A), id x = x.
+Proof.
+  intros x. reflexivity.
+Qed.
+
+Lemma Either_map_id {E X} :
+  forall (x : Either E X), Either_map id x = x.
+Proof.
+  intros x.
+  destruct x;
+  reflexivity.
+Qed.
+
 Definition Either_bimap {A B X Y} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
   match x with
   | Left a  => Left (f a)
