@@ -33,11 +33,19 @@ Inductive Select (f : Type -> Type) (a : Type) :=
 Arguments Pure {f} {a}.
 Arguments MkSelect {f} {a} {b}.
 
+(* Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F} *)
+(*            (f : (B -> A)) (x : Select F B) : Select F A := *)
+(*   match x with *)
+(*   | Pure a => Pure (f a) *)
+(*   | MkSelect x y => MkSelect (Select_map (fmap f) x) ((fun g => compose f g) <$> y) *)
+(*   end. *)
+
 Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F}
            (f : (B -> A)) (x : Select F B) : Select F A :=
   match x with
   | Pure a => Pure (f a)
-  | MkSelect x y => MkSelect (Select_map (fmap f) x) ((fun g => compose f g) <$> y)
+  | MkSelect x y => MkSelect (Select_map (Either_map f) x)
+                             ((fun k : _ -> B => f \o k) <$> y)
   end.
 
 Program Instance Select_Functor (F : Type -> Type)
@@ -88,6 +96,14 @@ Import FunctorLaws.
 (* Select_map (Either_map f) (Select_map (Either_map g) XX) = *)
 (*   Select_map (Either_map (f \o g)) XX *)
 
+Lemma fmap_rewrite_compose {A B C : Type} `{Functor F} :
+  forall (f : B -> C) (g : A -> B) (x : F A), 
+    fmap f (fmap g x) = (fmap f \o fmap g) x.
+Proof.
+  intros f g x.
+  reflexivity.
+Qed.
+
 Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
 (* Theorem Select_Functor_law1 {A : Type} *)
 (*         `{Functor F} `{FunctorLaws F} : *)
@@ -110,14 +126,55 @@ Qed.
 (*   forall (f : B -> C) (g : A -> B) (x : Select F A), *)
 (*   ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x. *)
 Obligation 2.
-extensionality XX.
+extensionality x.
+induction x as [|a B x IHx].
+- reflexivity.
+- simpl in *.
+  f_equal.
+  + rewrite <- Either_map_comp.
+    Check Select_ind.
+(* extensionality x. *)
+(* induction x as [|a B x IHx]. *)
+(* - reflexivity. *)
+(* - simpl in *. *)
+(*   f_equal. *)
+(*   + destruct IHx. *)
+
+(*     rewrite <- Either_map_comp. *)
+(*     Check Select_ind. *)
+
+    (* pose (z := @Either_map b0 a b g). *)
+    (* assert (z = Either_map g). *)
+    (* { reflexivity. } *)
+    (* rewrite <- H1. *)
+    (* pose (thing1 := fmap (fun f : b0 -> a => g \o f) f0). *)
+    (* pose (thing2 := Select_map (either id g) XX).  *)
+    
+  + rewrite fmap_rewrite_compose.
+    rewrite fmap_comp.
+    f_equal.
+
+simpl.
 induction XX.
 - reflexivity.
-- simpl.
-  f_equal.
-  * simpl in IHXX.
-    rewrite <- Either_map_comp.
-Admitted.
+- simpl. f_equal.
+  + rewrite <- Either_map_comp.
+    rewrite IHXX with (g := (Either_map g)).
+  + rewrite fmap_rewrite_compose.
+    rewrite fmap_comp.
+    f_equal.
+(* Obligation 2. *)
+(* extensionality XX. *)
+(* simpl. *)
+(* induction XX. *)
+(* - reflexivity. *)
+(* - simpl. f_equal. *)
+(*   + rewrite <- Either_map_comp. *)
+(*     rewrite IHXX with (g := (Either_map g)). *)
+(*   + rewrite fmap_rewrite_compose. *)
+(*     rewrite fmap_comp. *)
+(*     f_equal. *)
+    
 
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
