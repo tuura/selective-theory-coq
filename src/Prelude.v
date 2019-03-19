@@ -13,6 +13,9 @@ Definition const {A B : Type} (x : B) : A -> B := fun _ => x.
 
 Definition apply `(f : a -> b) (x : a) : b := f x.
 
+Definition uncurry `(f : a -> b -> c) : (a * b -> c) :=
+  fun z => f (fst z) (snd z).
+
 Notation "f .: g" := (fun x y => f (g x y)) (at level 100).
 
 (*
