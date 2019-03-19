@@ -2,6 +2,7 @@ Generalizable All Variables.
 
 Require Import Data.Functor.
 Require Import Control.Applicative.
+Require Import FunctionalExtensionality.
 
 Notation Either := sum (only parsing).
 Notation Left   := inl (only parsing).
@@ -40,10 +41,10 @@ Proof.
   intros x. reflexivity.
 Qed.
 
-Lemma Either_map_id {E X} :
-  forall (x : Either E X), Either_map id x = x.
+Lemma Either_map_id {E X : Type} :
+  @Either_map E X X id = id.
 Proof.
-  intros x.
+  extensionality x.
   destruct x;
   reflexivity.
 Qed.

@@ -68,7 +68,7 @@ induction x.
 - simpl.
   rewrite fmap_id.
   reflexivity.
-Qed.
+Defined.
 Obligation 2.
 extensionality x.
 induction x.
@@ -78,7 +78,7 @@ induction x.
   rewrite fmap_rewrite_compose.
   rewrite fmap_comp.
   f_equal.
-Qed.
+Defined.
 
 Require Coq.Program.Wf.
 
@@ -112,19 +112,6 @@ Proof.
 Defined.
 Transparent FreeA_ap_unfold.
 
-(* Program Fixpoint FreeA_ap {A B : Type} `{FF: Functor F} *)
-(*          (k : FreeA F (A -> B)) (y : FreeA F A) {measure (FreeA_depth k)} : FreeA F B := *)
-(*   match k with *)
-(*   | Pure g => g <$> y *)
-(*   | MkAp h x => MkAp (fmap uncurry h) (FreeA_ap (fmap pair x) y) *)
-(*   end. *)
-(* Obligation 1. *)
-(* Proof. *)
-(*   simpl. *)
-(*   rewrite FreeA_fmap_preserves_depth. *)
-(*   auto. *)
-(* Qed. *)
-
 Program Instance FreeA_Applicative
   `{Functor F} : Applicative (FreeA F) := {
   pure _ x := Pure x;
@@ -133,10 +120,22 @@ Program Instance FreeA_Applicative
 
 Import ApplicativeLaws.
 
+(* ∀g :: f (y → a), u :: FreeA f x. *)
+(* fmap ( ◦ h) g :$: u ≡ g :$: fmap h u *)
+Lemma lemma1 {A X Y : Type} `{Functor F} :
+  forall (g : F (Y -> A)) (h : X -> Y) (u : FreeA F X),
+    MkAp (fmap (fun k : Y -> A => k \o h) g) u = MkAp g (fmap h u).
+Proof.
+Admitted.
+
+
 Program Instance FreeA_ApplicativeLaws
   `{FunctorLaws F} :
   ApplicativeLaws (FreeA F).
 Obligation 1.
+(* ap_id *)
+(* ap (pure id) = id *)
+(* FreeA_ap (Pure id) y) = id *)
 extensionality y.
 induction y.
 - reflexivity.
@@ -145,6 +144,22 @@ induction y.
   rewrite fmap_id.
   reflexivity.
 Obligation 2.
+(* ap_comp : forall (a b c : Type) (v : f (a -> b)) (u : f (b -> c)) (w : f a), *)
+(*     pure (fun f g x => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w); *)
+(* FreeA_ap *)
+(*   (FreeA_ap (FreeA_ap (Pure (fun f g x => f (g x))) u) v) w = *)
+(* FreeA_ap u (FreeA_ap v w) *)
+admit.
+Obligation 4.
+admit.
+
+  
+(* pose (goal := fun u => FreeA_ap u (Pure y) = FreeA_ap (Pure (fun f : a -> b => f y)) u). *)
+(* refine (FreeA_ind F goal _ _). *)
+
+
+
+
 
 
 

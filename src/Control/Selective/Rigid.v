@@ -41,11 +41,11 @@ Arguments MkSelect {f} {a} {b}.
 (*   end. *)
 
 Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F}
-           (f : (B -> A)) (x : Select F B) : Select F A :=
+           (f : (A -> B)) (x : Select F A) : Select F B :=
   match x with
   | Pure a => Pure (f a)
   | MkSelect x y => MkSelect (Select_map (Either_map f) x)
-                             ((fun k : _ -> B => f \o k) <$> y)
+                             ((fun k : _ -> A => f \o k) <$> y)
   end.
 
 Program Instance Select_Functor (F : Type -> Type)
@@ -132,7 +132,9 @@ induction x as [|a B x IHx].
 - simpl in *.
   f_equal.
   + rewrite <- Either_map_comp.
-    Check Select_ind.
+    pose (g' : B + a -> b := fun y => match y with
+                                      | Left e => ) 
+    
 (* extensionality x. *)
 (* induction x as [|a B x IHx]. *)
 (* - reflexivity. *)
