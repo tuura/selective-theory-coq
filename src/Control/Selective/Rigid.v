@@ -33,13 +33,13 @@ Inductive Select (f : Type -> Type) (a : Type) :=
 Arguments Pure {f} {a}.
 Arguments MkSelect {f} {a} {b}.
 
-(* Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F} *)
-(*            (f : (B -> A)) (x : Select F B) : Select F A := *)
-(*   match x with *)
-(*   | Pure a => Pure (f a) *)
-(*   | MkSelect x y => MkSelect (Select_map (fmap f) x) ((fun g => compose f g) <$> y) *)
-(*   end. *)
-
+(* Note that `fmap` for `Select` implementation uses two `Functor` instances in its
+   implemetation:
+     Either for the first argument of the `MkSelect` constructor and
+     Function for the second.
+   Here we avoid using the instances and instead use the appropriate `fmap`
+   implementations explicitely: `Either_map` and function composition
+*)
 Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F}
            (f : (A -> B)) (x : Select F A) : Select F B :=
   match x with
@@ -53,13 +53,12 @@ Program Instance Select_Functor (F : Type -> Type)
   fmap := fun _ _ f x => Select_map f x
 }.
 
+(* Auxiliary lemmas for proving Functor laws *)
 Definition id_f {A : Type} (x : A) := x.
 
 Lemma id_x_is_x {A : Type}:
   forall (x : A), id x = x.
-Proof.
-  intros x. reflexivity.
-Qed.
+Proof. intros x. reflexivity. Qed.
 
 Lemma compose_id {A B : Type}:
   forall (f : A -> B), (compose f id) = f.
@@ -67,15 +66,13 @@ Proof.
   intros f.
   extensionality x.
   unfold compose.
-  rewrite id_x_is_x.
-  reflexivity.
+  now rewrite id_x_is_x.
 Qed.
 
 Lemma Either_map_id {E X : Type} : Either_map (E:=E) (@id X) = id.
 Proof.
   extensionality x.
-  destruct x;
-  reflexivity.
+  now destruct x.
 Qed.
 
 Lemma Either_map_comp {E A B C : Type} :
@@ -84,17 +81,10 @@ Lemma Either_map_comp {E A B C : Type} :
 Proof.
   intros f g.
   extensionality x.
-  destruct x; reflexivity.
+  now destruct x.
 Qed.
 
 Import FunctorLaws.
-
-(* Lemma Select_Either_map_commute {E A B : Type} `{Functor F} : *)
-(*   forall (x : Select F (E + A)) (f : A -> B), *)
-(*   Select_map (Either_map f) x = Either_map (Select_map f) x. *)
-
-(* Select_map (Either_map f) (Select_map (Either_map g) XX) = *)
-(*   Select_map (Either_map (f \o g)) XX *)
 
 Lemma fmap_rewrite_compose {A B C : Type} `{Functor F} :
   forall (f : B -> C) (g : A -> B) (x : F A), 
@@ -110,16 +100,13 @@ Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
 (*   forall (x : Select F A), fmap id x = id x. *)
 Obligation 1.
 unfold id.
-extensionality XX.
-induction XX.
-- reflexivity.
-- simpl.
-  f_equal.
+extensionality x.
+induction x as [| A b s IH handler]; trivial; simpl in *.
+- f_equal.
   * rewrite Either_map_id.
-    apply IHXX.
+    apply IH.
   * setoid_rewrite compose_id. (* rewrite under the fun binder *)
-    rewrite fmap_id.
-    reflexivity.
+    now rewrite fmap_id.
 Qed.
 (* Theorem Select_Functor_law2 {A B C : Type} *)
 (*         `{Functor F} `{FunctorLaws F} : *)
@@ -127,57 +114,22 @@ Qed.
 (*   ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x. *)
 Obligation 2.
 extensionality x.
-induction x as [|a B x IHx].
-- reflexivity.
-- simpl in *.
-  f_equal.
-  + rewrite <- Either_map_comp.
-    pose (g' : B + a -> b := fun y => match y with
-                                      | Left e => ) 
-    
-(* extensionality x. *)
-(* induction x as [|a B x IHx]. *)
-(* - reflexivity. *)
-(* - simpl in *. *)
-(*   f_equal. *)
-(*   + destruct IHx. *)
-
-(*     rewrite <- Either_map_comp. *)
-(*     Check Select_ind. *)
-
-    (* pose (z := @Either_map b0 a b g). *)
-    (* assert (z = Either_map g). *)
-    (* { reflexivity. } *)
-    (* rewrite <- H1. *)
-    (* pose (thing1 := fmap (fun f : b0 -> a => g \o f) f0). *)
-    (* pose (thing2 := Select_map (either id g) XX).  *)
-    
-  + rewrite fmap_rewrite_compose.
-    rewrite fmap_comp.
-    f_equal.
-
 simpl.
-induction XX.
-- reflexivity.
-- simpl. f_equal.
-  + rewrite <- Either_map_comp.
-    rewrite IHXX with (g := (Either_map g)).
-  + rewrite fmap_rewrite_compose.
-    rewrite fmap_comp.
-    f_equal.
-(* Obligation 2. *)
-(* extensionality XX. *)
-(* simpl. *)
-(* induction XX. *)
-(* - reflexivity. *)
-(* - simpl. f_equal. *)
-(*   + rewrite <- Either_map_comp. *)
-(*     rewrite IHXX with (g := (Either_map g)). *)
-(*   + rewrite fmap_rewrite_compose. *)
-(*     rewrite fmap_comp. *)
-(*     f_equal. *)
+(* It is SUPER IMPORTANT to generalise the two type variables B and C
+   (and thus also the functions f and g), because otherwise the
+   inductive hypothesis will be not general enough! *)
+revert b c g f.
+induction x as [| A b s IH selector]; simpl in *; trivial; intros B C g f.
+- f_equal.
+  + (* Let us explicitely specify all parameters of the IH, note that
+       B is instantiated as (b + B) and C as (c + C) *)
+    rewrite (IH (b + B)%type (b + C)%type (Either_map g) (Either_map f)).
+    now rewrite Either_map_comp.
+  + (* The second subgoal here is discharged by Functor laws for functions *)
+    rewrite fmap_rewrite_compose.
+    now rewrite fmap_comp.
+Qed.
     
-
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
 
