@@ -33,6 +33,10 @@ Inductive Select (f : Type -> Type) (a : Type) :=
 Arguments Pure {f} {a}.
 Arguments MkSelect {f} {a} {b}.
 
+(******************************************************************************)
+(************************ Functor and FunctorLaws *****************************)
+(******************************************************************************)
+
 (* Note that `fmap` for `Select` implementation uses two `Functor` instances in its
    implemetation:
      Either for the first argument of the `MkSelect` constructor and
@@ -129,7 +133,31 @@ induction x as [| A b s IH selector]; simpl in *; trivial; intros B C g f.
     rewrite fmap_rewrite_compose.
     now rewrite fmap_comp.
 Qed.
-    
+
+(******************************************************************************)
+(************************ Selective               *****************************)
+(******************************************************************************)
+
+(* We will need use the depth of the `Select` values as measure for defining
+   non-structuraly recursive functions. *)
+Fixpoint Select_depth {A : Type} `{Functor F}
+         (x : Select F A) : nat :=
+  match x with
+  | Pure a   => O
+  | MkSelect y _ => S (Select_depth y)
+  end.
+
+Lemma Select_fmap_preserves_depth {A B : Type} `{Functor F} :
+  forall (x : Select F A) (f : A -> B),
+  Select_depth (Select_map f x) = Select_depth x.
+Proof.
+  intros x.
+  (* Again, we need the IH to be generalised in the type variable B*)
+  revert B.
+  induction x as [| A b s IH handler]; trivial; simpl in *; intros f1 B.
+  now rewrite IH.
+Qed.
+
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
 
@@ -153,30 +181,40 @@ Definition law3_h  {A B C : Type}
 (*              (law3_h <$> z) *)
 (*   end. *)
 
+Require Import Coq.Program.Wf.
+Require Import Omega.
 
-(* ?O(n)? select implementation *)
-Fixpoint Select_select_go {A B C : Type} `{Functor F}
-         (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) {struct s} :
-         Select F B :=
-  match s with
-  | Pure y => either (k y) id <$> x
-  | MkSelect y z =>
-    MkSelect (Select_select_go (law3_f <$> x)
-                               y
-                               (compose law3_g (mapRight k))
-             )
-             (compose law3_h (compose k) <$> z)
+Program Fixpoint Select_select {A B : Type} `{Functor F}
+        (x : Select F (B + A)) (f : Select F (B -> A))
+        {measure (Select_depth f)} : Select F A :=
+  match f with
+  | Pure y => either y id <$> x
+  | MkSelect y z => MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z)
   end.
+Obligation 1.
+Proof.
+  simpl.
+  rewrite Select_fmap_preserves_depth.
+  omega.
+Qed.
 
-Fixpoint Select_select  {A B : Type} `{Functor F}
-         (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A :=
-  Select_select_go x f id.
+(* (* ?O(n)? select implementation *) *)
+(* Fixpoint Select_select_go {A B C : Type} `{Functor F} *)
+(*          (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) {struct s} : *)
+(*          Select F B := *)
+(*   match s with *)
+(*   | Pure y => either (k y) id <$> x *)
+(*   | MkSelect y z => *)
+(*     MkSelect (Select_select_go (law3_f <$> x) *)
+(*                                y *)
+(*                                (compose law3_g (mapRight k)) *)
+(*              ) *)
+(*              (compose law3_h (compose k) <$> z) *)
+(*   end. *)
 
-    (* select x (Select y z) = Select (select (f <$> x) (g <$> y)) (h <$> z) *)
-    (*   where *)
-    (*     f x = Right <$> x *)
-    (*     g y = \a -> bimap (,a) ($a) y *)
-    (*     h z = uncurry z *)
+(* Fixpoint Select_select  {A B : Type} `{Functor F} *)
+(*          (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A := *)
+(*   Select_select_go x f id. *)
 
 Definition Select_ap {A B : Type} {F : Type -> Type} `{Functor F}
            (t : Select F (A -> B)) (x : Select F A) : Select F B :=
@@ -188,6 +226,29 @@ Program Instance Select_Applicative
   ; pure _ x := Pure x
   ; ap _ _ f x := Select_ap f x
 }.
+
+Import ApplicativeLaws.
+
+Program Instance Select_ApplicativeLaws `{FunctorLaws F} : ApplicativeLaws (Select F).
+(* (forall (F : Type -> Type) (H : Functor F), *)
+(*  FunctorLaws F -> forall a : Type, ap[ Select F] ((pure[ Select F]) id) = id). *)
+(* pure id <*> v = v   *)
+Obligation 1.
+extensionality x.
+induction x as [| A b s IH handler]; simpl in *; trivial.
+- unfold Select_ap, id in *.
+Admitted.
+Obligation 2.
+(* pure (.) <*> u <*> v <*> w = u <*> (v <*> w) *)
+revert a b c v u w.
+intros A B C v u w.  
+(* pure (.) <*> u <*> v <*> w = u <*> (v <*> w) *)
+Admitted.
+Obligation 4.
+(* u <*> pure y = pure ($ y) <*> u   *)
+Admitted.
+Obligation 5.
+Admitted.
 
 Program Instance Select_Selective (F : Type -> Type) `{Functor F}: Selective (Select F) :=
   { is_applicative := Select_Applicative F
@@ -207,13 +268,6 @@ Proof.
     reflexivity.
 Qed.
 
-Lemma pure_eq_pure {A B : Type} {F : Type -> Type} {x y : A} :
-  @Pure F A x = @Pure F A y -> x = y.
-Proof.
-  intros H.
-  congruence.
-Qed.
-
 Theorem select_selective_law2_distr
   {A B : Type} {F : Type -> Type} `{Functor F}
   (x : (Either A B))
@@ -221,29 +275,7 @@ Theorem select_selective_law2_distr
   (z : Select F (A -> B)) :
   pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z).
 Proof.
-  simpl pure.
-  destruct x.
-  - induction y.
-  
-  (* destruct x. *)
-  (* - simpl. *)
-  (*   destruct y. *)
-  (*   -- simpl. *)
-  (*      destruct z. *)
-  (*      --- simpl. *)
-  (*          unfold Select_ap. simpl. reflexivity. *)
-  (*      --- unfold Select_ap. *)
-  (*          destruct z. *)
-  (*          + simpl. *)
-  destruct y.
-  - destruct z.
-    + simpl. unfold Select_ap. simpl.
-      simpl.
-      destruct x; simpl; reflexivity.
-    + destruct z.
-      * destruct s.
-        -- 
-        
+Admitted.        
 
 Theorem select_selective_law3_assoc
   {A B C : Type} {F : Type -> Type} `{Functor F}
@@ -252,6 +284,9 @@ Theorem select_selective_law3_assoc
   (z : Select F (A -> B -> C)) :
   x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z).
 Proof.
+  simpl.
+  revert A y z.
+  induction x.
   (* destruct y. *)
   (* - simpl. *)
   (*   destruct x. *)
