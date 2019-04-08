@@ -139,17 +139,19 @@ Obligation 1.
 extensionality y.
 induction y.
 - reflexivity.
-- rewrite FreeA_ap_unfold_eq.
-  unfold FreeA_ap_unfold.
-  rewrite fmap_id.
-  reflexivity.
+- rewrite FreeA_ap_equation_1.
+  now rewrite fmap_id.
+Defined.
 Obligation 2.
 (* ap_comp : forall (a b c : Type) (v : f (a -> b)) (u : f (b -> c)) (w : f a), *)
 (*     pure (fun f g x => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w); *)
 (* FreeA_ap *)
 (*   (FreeA_ap (FreeA_ap (Pure (fun f g x => f (g x))) u) v) w = *)
 (* FreeA_ap u (FreeA_ap v w) *)
-admit.
+rewrite FreeA_ap_equation_1.
+(* remember (fmap[ FreeA F] (fun (f : b -> c) (g : a -> b) (x : a) => f (g x)) u) as t. *)
+induction w.
+- simpl. 
 Obligation 4.
 admit.
 

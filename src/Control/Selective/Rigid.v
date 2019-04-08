@@ -11,6 +11,8 @@ Require Import Coq.Setoids.Setoid.
 Require Import Coq.Classes.Morphisms.
 Require Import Classes.Morphisms_Prop.
 Require Import FunctionalExtensionality.
+Require Import Omega.
+From Equations Require Import Equations.
 
 Generalizable All Variables.
 (* Functors preserve extensional equality for the applied function.
@@ -44,13 +46,11 @@ Arguments MkSelect {f} {a} {b}.
    Here we avoid using the instances and instead use the appropriate `fmap`
    implementations explicitely: `Either_map` and function composition
 *)
-Fixpoint Select_map {A B : Type} {F : Type -> Type} `{Functor F}
-           (f : (A -> B)) (x : Select F A) : Select F B :=
-  match x with
-  | Pure a => Pure (f a)
-  | MkSelect x y => MkSelect (Select_map (Either_map f) x)
-                             ((fun k : _ -> A => f \o k) <$> y)
-  end.
+Equations Select_map {A B : Type} {F : Type -> Type} `{Functor F}
+           (f : A -> B) (x : Select F A) : Select F B :=
+Select_map f (Pure a) => Pure (f a);
+Select_map f (MkSelect x y) => MkSelect (Select_map (Either_map f) x)
+                                        ((fun k : _ -> A => f \o k) <$> y).
 
 Program Instance Select_Functor (F : Type -> Type)
   `{Functor F} : Functor (Select F) := {
@@ -98,6 +98,29 @@ Proof.
   reflexivity.
 Qed.
 
+Theorem Select_Functor_law2 {A B C : Type}
+        `{Functor F} `{FunctorLaws F} :
+  forall (f : B -> C) (g : A -> B) (x : Select F A),
+    Select_map f (Select_map g x) = Select_map (f \o g) x.
+Proof.
+intros f g x.
+simpl.
+(* It is SUPER IMPORTANT to generalise the two type variables B and C
+   (and thus also the functions f and g), because otherwise the
+   inductive hypothesis will be not general enough! *)
+revert B C g f.
+induction x as [| A b s IH handler]; simpl in *; trivial; intros B C g f.
+- repeat rewrite Select_map_equation_2.
+  f_equal.
+  + (* Let us explicitely specify all parameters of the IH, note that
+       B is instantiated as (b + B) and C as (c + C) *)
+    rewrite (IH (b + B)%type (b + C)%type (Either_map g) (Either_map f)).
+    now rewrite Either_map_comp.
+  + (* The second subgoal here is discharged by Functor laws for functions *)
+    rewrite fmap_rewrite_compose.
+    now rewrite fmap_comp.
+Qed.
+
 Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
 (* Theorem Select_Functor_law1 {A : Type} *)
 (*         `{Functor F} `{FunctorLaws F} : *)
@@ -106,7 +129,8 @@ Obligation 1.
 unfold id.
 extensionality x.
 induction x as [| A b s IH handler]; trivial; simpl in *.
-- f_equal.
+- rewrite Select_map_equation_2.
+  f_equal.
   * rewrite Either_map_id.
     apply IH.
   * setoid_rewrite compose_id. (* rewrite under the fun binder *)
@@ -124,7 +148,8 @@ simpl.
    inductive hypothesis will be not general enough! *)
 revert b c g f.
 induction x as [| A b s IH selector]; simpl in *; trivial; intros B C g f.
-- f_equal.
+- repeat rewrite Select_map_equation_2.
+  f_equal.
   + (* Let us explicitely specify all parameters of the IH, note that
        B is instantiated as (b + B) and C as (c + C) *)
     rewrite (IH (b + B)%type (b + C)%type (Either_map g) (Either_map f)).
@@ -155,7 +180,7 @@ Proof.
   (* Again, we need the IH to be generalised in the type variable B*)
   revert B.
   induction x as [| A b s IH handler]; trivial; simpl in *; intros f1 B.
-  now rewrite IH.
+  - repeat rewrite Select_map_equation_2. simpl. now rewrite IH.
 Qed.
 
 Definition law3_f {A B C : Type}
@@ -181,22 +206,22 @@ Definition law3_h  {A B C : Type}
 (*              (law3_h <$> z) *)
 (*   end. *)
 
-Require Import Coq.Program.Wf.
-Require Import Omega.
-
-Program Fixpoint Select_select {A B : Type} `{Functor F}
-        (x : Select F (B + A)) (f : Select F (B -> A))
-        {measure (Select_depth f)} : Select F A :=
-  match f with
-  | Pure y => either y id <$> x
-  | MkSelect y z => MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z)
-  end.
+Equations Select_select {A B : Type} `{Functor F}
+          (x : Select F (A + B)) (handler : Select F (A -> B)) : Select F B by wf (Select_depth handler) :=
+Select_select x (Pure y) := either y id <$> x;
+Select_select x (MkSelect y z) := MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z).
 Obligation 1.
-Proof.
-  simpl.
-  rewrite Select_fmap_preserves_depth.
-  omega.
-Qed.
+Proof. rewrite Select_fmap_preserves_depth. omega. Qed.
+
+(* Program Fixpoint Select_select {A B : Type} `{Functor F} *)
+(*         (x : Select F (B + A)) (f : Select F (B -> A)) *)
+(*         {measure (Select_depth f)} : Select F A := *)
+(*   match f with *)
+(*   | Pure y => either y id <$> x *)
+(*   | MkSelect y z => MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z) *)
+(*   end. *)
+(* Obligation 1. *)
+(* Proof. rewrite Select_fmap_preserves_depth. omega. Qed. *)
 
 (* (* ?O(n)? select implementation *) *)
 (* Fixpoint Select_select_go {A B C : Type} `{Functor F} *)
@@ -216,9 +241,9 @@ Qed.
 (*          (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A := *)
 (*   Select_select_go x f id. *)
 
-Definition Select_ap {A B : Type} {F : Type -> Type} `{Functor F}
-           (t : Select F (A -> B)) (x : Select F A) : Select F B :=
-  Select_select (Left <$> t) ((fun y f => f y) <$> x).
+Definition Select_ap {A B : Type} `{Functor F}
+           (f : Select F (A -> B)) (x : Select F A) : Select F B :=
+  Select_select (Left <$> f) ((fun y g => g y) <$> x).
 
 Program Instance Select_Applicative
         (F : Type -> Type) `{Functor F} : Applicative (Select F) :=
@@ -227,7 +252,36 @@ Program Instance Select_Applicative
   ; ap _ _ f x := Select_ap f x
 }.
 
+(******************************************************************************)
+(***************** Aux theorems ***********************************************)
+(******************************************************************************)
+Theorem P2 {A B : Type} `{Functor F} :
+  forall (x : A) (y : Select F (A -> B)),  
+  Select_select (Pure (inl x)) y = Select_map (fun k => k x) y.
+  (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
+Proof.
+  revert A B.
+  Check Select_ind.
+  Set Printing Universes.
+  Check (Type -> Type).
+  induction y as [| C b s IH handler].
+  destruct y.
+  - reflexivity.
+  - rewrite Select_select_equation_2.
+    rewrite Select_map_equation_2.
+    f_equal.
+  rewrite Select_select_unfold_eq.
+  Search Select_select.
+  unfold Select_select_unfold.
+
 Import ApplicativeLaws.
+
+Lemma id_free : forall (A : Type) (f : A -> A),
+    f = id.
+Proof.
+Admitted.
+
+
 
 Program Instance Select_ApplicativeLaws `{FunctorLaws F} : ApplicativeLaws (Select F).
 (* (forall (F : Type -> Type) (H : Functor F), *)
@@ -235,6 +289,56 @@ Program Instance Select_ApplicativeLaws `{FunctorLaws F} : ApplicativeLaws (Sele
 (* pure id <*> v = v   *)
 Obligation 1.
 extensionality x.
+(* revert a x. *)
+(* induction x as [| A b s IH handler]. *)
+(* - reflexivity. *)
+(* - unfold id at 2. unfold id at 2 in IH. *)
+(*   unfold Select_ap. *)
+(*   simpl fmap at 2. *)
+(*   rewrite Select_map_equation_2 at 1. *)
+(*   rewrite Select_select_equation_2 at 1. *)
+(*   unfold id. *)
+(*   remember (  *)
+(*     (Select_select (fmap[ Select F] law3_f (fmap[ Select F] inl (Pure (fun x : A => x)))) *)
+(*        (fmap[ Select F] law3_g (Select_map (Either_map (fun (y : A) (g : A -> A) => g y)) s))) *)
+(*        ) as lhs1. *)
+(*   remember ( *)
+(*           (fmap[ F] law3_h (fmap[ F] (fun k : b -> A => (fun (y : A) (g : A -> A) => g y) \o k) handler)) *)
+(*        ) as lhs2. *)
+
+unfold Select_ap. simpl. revert a x.
+induction x as [| A b s IH handler].
+- simpl.
+  repeat rewrite Select_map_equation_1.
+  repeat rewrite Select_select_equation_1. simpl fmap.
+  repeat rewrite Select_map_equation_1. reflexivity.
+- repeat rewrite Select_map_equation_1 in *.
+  repeat rewrite Select_map_equation_2 in *.
+  rewrite Select_select_equation_2. simpl.
+  repeat rewrite Select_map_equation_1.
+  unfold id at 2.
+  unfold law3_f, law3_h. simpl.
+  remember ((Either_map (E:=b) (fun (y : A) (f : A -> A) => f y))) as func1.
+  rewrite Select_Functor_law2.
+  
+
+  rewrite IH.
+  Check Select_select_equation_2.
+  rewrite Select_select_equation_2. simpl.
+  unfold id.
+  simpl in * |- *.
+  pose (term1 :=
+   (Select_select (Pure (law3_f (inl id)))
+                  (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s)))).
+  pose (term2 :=
+    (fmap[ F] law3_h (fmap[ F] (fun k : b -> A => (fun (y : A) (f : A -> A) => f y) \o k) handler))).
+  assert (H : (Select_map (fun (y : b + A) (f : b + A -> b + A) => f y) s) = s).
+  assert (H : (Select_select (Pure (law3_f (inl id)))
+                             (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s)))
+              = s).
+  {
+
+
 induction x as [| A b s IH handler]; simpl in *; trivial.
 - unfold Select_ap, id in *.
 Admitted.
