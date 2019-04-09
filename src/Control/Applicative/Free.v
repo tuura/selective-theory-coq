@@ -26,13 +26,18 @@ Proof.
   apply H0.
 Qed.
 
+Print nat_ind.
+Print nat_rect.
 
+(* Polymorphic Cumulative *)
 Inductive FreeA (f : Type -> Type) (a : Type) :=
     Pure : a -> FreeA f a
   | MkAp : forall b, f (b -> a) -> FreeA f b -> FreeA f a.
 
 Arguments Pure {f} {a}.
 Arguments MkAp {f} {a} {b}.
+
+Check FreeA_ind.
 
 Fixpoint FreeA_map {A B : Type} `{Functor F}
            (g : (A -> B)) (a : FreeA F A) : FreeA F B :=
@@ -63,24 +68,17 @@ Program Instance FreeA_FunctorLaws `{FunctorLaws F} : FunctorLaws (FreeA F).
 Obligation 1.
 Proof.
 extensionality x.
-induction x.
-- reflexivity.
-- simpl.
-  rewrite fmap_id.
-  reflexivity.
+revert x.
+induction x; simpl in *; trivial.
+- now rewrite fmap_id.
 Defined.
 Obligation 2.
 extensionality x.
-induction x.
-- reflexivity.
-- simpl in *.
-  f_equal.
+induction x; simpl in *; trivial.
+- f_equal.
   rewrite fmap_rewrite_compose.
-  rewrite fmap_comp.
-  f_equal.
+  now rewrite fmap_comp.
 Defined.
-
-Require Coq.Program.Wf.
 
 Fixpoint FreeA_depth {A : Type} `{Functor F}
          (x : FreeA F A) : nat :=
@@ -93,9 +91,7 @@ Lemma FreeA_fmap_preserves_depth {A B : Type} `{Functor F} :
   forall (x : FreeA F A) (f : A -> B),
   FreeA_depth (FreeA_map f x) = FreeA_depth x.
 Proof.
-  intros x f.
-  simpl.
-  induction x; reflexivity.
+  induction x; trivial.
 Qed.
 
 From Equations Require Import Equations.
@@ -106,9 +102,7 @@ FreeA_ap (Pure g) y := g <$> y;
 FreeA_ap (MkAp h x) y := MkAp (fmap uncurry h) (FreeA_ap (fmap pair x) y).
 Obligation 1.
 Proof.
-  simpl.
-  rewrite FreeA_fmap_preserves_depth.
-  auto.
+  rewrite FreeA_fmap_preserves_depth. auto.
 Defined.
 Transparent FreeA_ap_unfold.
 
@@ -120,14 +114,67 @@ Program Instance FreeA_Applicative
 
 Import ApplicativeLaws.
 
-(* ∀g :: f (y → a), u :: FreeA f x. *)
-(* fmap ( ◦ h) g :$: u ≡ g :$: fmap h u *)
-Lemma lemma1 {A X Y : Type} `{Functor F} :
-  forall (g : F (Y -> A)) (h : X -> Y) (u : FreeA F X),
-    MkAp (fmap (fun k : Y -> A => k \o h) g) u = MkAp g (fmap h u).
-Proof.
-Admitted.
+Print FreeA_ind.
 
+Definition My_FreeA_ind : forall (F : Type -> Type) (P : forall A : Type, FreeA F A -> Prop),
+       (forall (A : Type) (a0 : A), P A (Pure a0)) ->
+       (forall (A b : Type) (f1 : F (b -> A)) (f2 : FreeA F b), P b f2 -> P A (MkAp f1 f2)) ->
+       forall (A : Type) (f2 : FreeA F A), P A f2
+  := 
+fun (f : Type -> Type) (P : forall a : Type, FreeA f a -> Prop) (f0 : forall (a : Type) (a0 : a), P a (Pure a0))
+  (f1 : forall (a b : Type) (f1 : f (b -> a)) (f2 : FreeA f b), P b f2 -> P a (MkAp f1 f2)) =>
+fix F (a : Type) (f2 : FreeA f a) {struct f2} : P a f2 :=
+  match f2 as f3 return (P a f3) with
+  | Pure y => f0 a y
+  | @MkAp _ _ b y f3 => f1 a b y f3 (F b f3)
+  end.
+
+Lemma lemma1_pure {A B C : Type} `{Functor F} `{FunctorLaws F} :
+  forall (u : B -> C) (f : A -> B) (x : FreeA F A),
+    fmap u (Pure f <*> x) = fmap (fun k : A -> B => u \o k) (Pure f) <*> x.
+Proof.
+  intros u f x.
+  simpl "<*>".
+  repeat rewrite FreeA_ap_equation_1.
+  now rewrite <- fmap_comp.
+Qed.
+
+Lemma lemma1_ap {A B C b : Type} `{Functor F} `{FunctorLaws F} :
+  forall (u : B -> C) (v : FreeA F b) (f : F (b -> A -> B)) (x : FreeA F A), 
+         (* (IH : forall (g : FreeA F (b -> A -> B)), fmap u (g <*> v) = fmap (fun k : A -> B => u \o k) g <*> v), *)
+    fmap u (MkAp f v <*> x) = fmap (fun k : A -> B => u \o k) (MkAp f v) <*> x.
+Proof.
+  intros u v f x.
+  simpl "<*>".
+  repeat rewrite (FreeA_ap_equation_2).
+  simpl.
+  f_equal.
+  (* Need lemmas about uncurry? *) 
+  rewrite <- fmap_comp.
+  
+(* fmap[ FreeA F] u (MkAp f v <*> x) = fmap[ FreeA F] (fun k : A -> B => u \o k) (MkAp f v) <*> x *)
+
+
+(* ∀g :: f (y → a), u :: FreeA f x. *)
+(* fmap ( ◦ h) g :$: u ≡ g :$: fmap h unfold  *)
+Lemma lemma1 {A B C : Type} `{Functor F} :
+  forall (u : B -> C) (v : FreeA F (A -> B)) (x : FreeA F A),
+    fmap u (v <*>x) = fmap (fun k : A -> B => u \o k) v <*> x.
+Proof.
+  intros u v x.
+  destruct v.
+  - simpl. admit.
+  - intros.
+  induction v.
+  pose (Statement := fun (v0 : FreeA F (A -> B)) =>
+    forall x : FreeA F A,
+    fmap u (v0 <*> x) =
+    fmap (fun k : A -> B => u \o k) v0 <*> x
+       ).
+  Locate "<**>".
+  Check (FreeA_ind F Statement).
+  induction v.
+Admitted.
 
 Program Instance FreeA_ApplicativeLaws
   `{FunctorLaws F} :
@@ -135,7 +182,7 @@ Program Instance FreeA_ApplicativeLaws
 Obligation 1.
 (* ap_id *)
 (* ap (pure id) = id *)
-(* FreeA_ap (Pure id) y) = id *)
+(* FreeA_ap (Pure id) y) = idtac *)
 extensionality y.
 induction y.
 - reflexivity.
@@ -143,7 +190,7 @@ induction y.
   now rewrite fmap_id.
 Defined.
 Obligation 2.
-(* ap_comp : forall (a b c : Type) (v : f (a -> b)) (u : f (b -> c)) (w : f a), *)
+(* ap_comp : forall (a b c : TYpe) (v : f (a -> b)) (u : f (b -> c)) (w : f a), *)
 (*     pure (fun f g x => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w); *)
 (* FreeA_ap *)
 (*   (FreeA_ap (FreeA_ap (Pure (fun f g x => f (g x))) u) v) w = *)
