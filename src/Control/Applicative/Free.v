@@ -116,19 +116,6 @@ Import ApplicativeLaws.
 
 Print FreeA_ind.
 
-Definition My_FreeA_ind : forall (F : Type -> Type) (P : forall A : Type, FreeA F A -> Prop),
-       (forall (A : Type) (a0 : A), P A (Pure a0)) ->
-       (forall (A b : Type) (f1 : F (b -> A)) (f2 : FreeA F b), P b f2 -> P A (MkAp f1 f2)) ->
-       forall (A : Type) (f2 : FreeA F A), P A f2
-  := 
-fun (f : Type -> Type) (P : forall a : Type, FreeA f a -> Prop) (f0 : forall (a : Type) (a0 : a), P a (Pure a0))
-  (f1 : forall (a b : Type) (f1 : f (b -> a)) (f2 : FreeA f b), P b f2 -> P a (MkAp f1 f2)) =>
-fix F (a : Type) (f2 : FreeA f a) {struct f2} : P a f2 :=
-  match f2 as f3 return (P a f3) with
-  | Pure y => f0 a y
-  | @MkAp _ _ b y f3 => f1 a b y f3 (F b f3)
-  end.
-
 Lemma lemma1_pure {A B C : Type} `{Functor F} `{FunctorLaws F} :
   forall (u : B -> C) (f : A -> B) (x : FreeA F A),
     fmap u (Pure f <*> x) = fmap (fun k : A -> B => u \o k) (Pure f) <*> x.
