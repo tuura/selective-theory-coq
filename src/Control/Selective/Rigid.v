@@ -191,10 +191,7 @@ Definition law3_g {A B C : Type}
   fun a => Either_bimap (fun p => pair p a) (fun f => f a) y.
 
 Definition law3_h  {A B C : Type}
-           (f : A -> B -> C) : A * B -> C :=
-  fun p => match p with
-           | pair x y => f x y
-           end.
+           (f : A -> B -> C) : A * B -> C := uncurry f.
 
 (* Fixpoint Select_select_old {A B : Type} {F : Type -> Type} `{FF : Functor F} *)
 (*          (x : Select F (B + A)) (f : Select F (B -> A)) {struct f} : Select F A := *)
@@ -255,50 +252,113 @@ Program Instance Select_Applicative
 (******************************************************************************)
 (***************** Aux theorems ***********************************************)
 (******************************************************************************)
-Theorem P2 {A B : Type} `{Functor F} :
+(* -- P1 (Generalised identity): select x (pure y) == either y id <$> x *)
+(* p1 :: Selective f => f (Either a b) -> (a -> b) -> f b *)
+(* p1 x y = select x (pure y) === either y id <$> x *)
+Theorem P1 {A B : Type} `{FunctorLaws F} :
+  forall (x : Select F (Either A B)) (y : A -> B),
+    Select_select x (pure y) = either y id <$> x.
+Proof.
+  intros x y. simpl.
+  now rewrite Select_select_equation_1.
+Qed.
+
+Theorem P2 {A B : Type} `{FunctorLaws F} :
+  forall (x : A) (y : Select F (A -> B)),  
+  Select_select (Pure (inl x)) y = y <*> pure x.
+  (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
+Proof.
+  revert A B.
+  destruct y.
+  - reflexivity.
+  - (* rewrite Select_select_equation_2. *)
+    simpl "<*>". unfold Select_ap.
+    remember  (fmap[ Select F] (fun (y0 : A) (g : A -> B) => g y0) (Pure x)) as t.
+    simpl in Heqt.
+    rewrite Select_map_equation_1 in Heqt.
+    rewrite Heqt. clear Heqt. clear t.
+
+    rewrite Select_select_equation_1.
+    remember (fmap[ Select F] (either (fun g : A -> B => g x) id) (fmap[ Select F] inl (MkSelect y f))) as rhs.
+    assert (Htemp : rhs = fmap ((either (fun g : A -> B => g x) id) \o inl) (MkSelect y f)).
+    { rewrite Heqrhs. now rewrite <- fmap_comp. }
+    rewrite Heqrhs. rewrite Heqrhs in Htemp. rewrite Htemp.
+    clear Htemp. clear Heqrhs. clear rhs.
+    remember (either (fun g : A -> B => g x) id \o inl) as temp.
+    simpl fmap.
+    rewrite Select_map_equation_2.
+    rewrite Select_select_equation_2.
+    unfold law3_h.
+    remember (fmap[ F] (fun f0 : b -> A -> B => uncurry f0) f) as lhs_q.
+    remember (fmap[ F] (fun k : b -> A -> B => temp \o k) f) as rhs_q.
+
+
+    repeat rewrite Select_map_equation_1.
+    rewrite Select_select_equation_1.
+    simpl.
+    remember (fun g : A -> B => g x) as rhs_p.
+    remember (MkSelect (Select_map (Either_map inl) y) (fmap[ F] (fun k : b -> A -> B => inl \o k) f)) as rhs_q.
+    pose (Htemp := @P1 (A -> B) B F H H0). simpl in Htemp.
+    rewrite <- (Htemp rhs_q rhs_p). clear Htemp.
+    simpl.
+
+    unfold law3_f in Heqt. simpl in Heqt. rewrite Heqt. clear Heqt. clear t.
+    remember (Select_select (Pure (inl x)) (Select_map law3_g y)) as lhs_p.
+    remember (Select_map (Either_map (fun k : A -> B => k x)) y) as  rhs_p.
+    remember (fmap[ F] law3_h f) as lhs_q.
+    remember (fmap[ F] (fun k : b -> A -> B => (fun k0 : A -> B => k0 x) \o k) f) as rhs_q.
+
+    unfold "\o" in Heqrhs_q.
+
+Theorem P2 {A B : Type} `{FunctorLaws F} :
   forall (x : A) (y : Select F (A -> B)),  
   Select_select (Pure (inl x)) y = Select_map (fun k => k x) y.
   (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
 Proof.
   revert A B.
-  Check Select_ind.
-  Set Printing Universes.
-  Check (Type -> Type).
-  induction y as [| C b s IH handler].
   destruct y.
   - reflexivity.
-  - rewrite Select_select_equation_2.
+  - rewrite Select_select_equation_2. simpl.
     rewrite Select_map_equation_2.
-    f_equal.
-  rewrite Select_select_unfold_eq.
-  Search Select_select.
-  unfold Select_select_unfold.
+    rewrite Select_map_equation_1.
+    remember (law3_f (inl x)) as t.
+    unfold law3_f in Heqt. simpl in Heqt. rewrite Heqt. clear Heqt. clear t.
+    remember (Select_select (Pure (inl x)) (Select_map law3_g y)) as lhs_p.
+    remember (Select_map (Either_map (fun k : A -> B => k x)) y) as  rhs_p.
+    remember (fmap[ F] law3_h f) as lhs_q.
+    remember (fmap[ F] (fun k : b -> A -> B => (fun k0 : A -> B => k0 x) \o k) f) as rhs_q.
 
-Import ApplicativeLaws.
+    unfold "\o" in Heqrhs_q.
 
-Lemma id_free : forall (A : Type) (f : A -> A),
-    f = id.
-Proof.
+  Check Select_ind.
+  (* induction y as [| C b s IH handler]. *)
+  (* destruct y. *)
+  (* - reflexivity. *)
+  (* - rewrite Select_select_equation_2. *)
+  (*   rewrite Select_map_equation_2. *)
+  (*   f_equal. *)
+  (* rewrite Select_select_unfold_eq. *)
+  (* Search Select_select. *)
+  (* unfold Select_select_unfold. *)
 Admitted.
 
-
+Import ApplicativeLaws.
 
 Program Instance Select_ApplicativeLaws `{FunctorLaws F} : ApplicativeLaws (Select F).
 (* (forall (F : Type -> Type) (H : Functor F), *)
 (*  FunctorLaws F -> forall a : Type, ap[ Select F] ((pure[ Select F]) id) = id). *)
 (* pure id <*> v = v   *)
 Obligation 1.
-extensionality x.
+(* extensionality x. *)
 (* revert a x. *)
-(* induction x as [| A b s IH handler]. *)
-(* - reflexivity. *)
+(* induction x as [| A b s IH handler]; simpl in *; trivial. *)
 (* - unfold id at 2. unfold id at 2 in IH. *)
 (*   unfold Select_ap. *)
 (*   simpl fmap at 2. *)
 (*   rewrite Select_map_equation_2 at 1. *)
 (*   rewrite Select_select_equation_2 at 1. *)
 (*   unfold id. *)
-(*   remember (  *)
+(*   remember ( *)
 (*     (Select_select (fmap[ Select F] law3_f (fmap[ Select F] inl (Pure (fun x : A => x)))) *)
 (*        (fmap[ Select F] law3_g (Select_map (Either_map (fun (y : A) (g : A -> A) => g y)) s))) *)
 (*        ) as lhs1. *)
@@ -306,41 +366,41 @@ extensionality x.
 (*           (fmap[ F] law3_h (fmap[ F] (fun k : b -> A => (fun (y : A) (g : A -> A) => g y) \o k) handler)) *)
 (*        ) as lhs2. *)
 
-unfold Select_ap. simpl. revert a x.
-induction x as [| A b s IH handler].
-- simpl.
-  repeat rewrite Select_map_equation_1.
-  repeat rewrite Select_select_equation_1. simpl fmap.
-  repeat rewrite Select_map_equation_1. reflexivity.
-- repeat rewrite Select_map_equation_1 in *.
-  repeat rewrite Select_map_equation_2 in *.
-  rewrite Select_select_equation_2. simpl.
-  repeat rewrite Select_map_equation_1.
-  unfold id at 2.
-  unfold law3_f, law3_h. simpl.
-  remember ((Either_map (E:=b) (fun (y : A) (f : A -> A) => f y))) as func1.
-  rewrite Select_Functor_law2.
+(* unfold Select_ap. simpl. revert a x. *)
+(* induction x as [| A b s IH handler]. *)
+(* - simpl. *)
+(*   repeat rewrite Select_map_equation_1. *)
+(*   repeat rewrite Select_select_equation_1. simpl fmap. *)
+(*   repeat rewrite Select_map_equation_1. reflexivity. *)
+(* - repeat rewrite Select_map_equation_1 in *. *)
+(*   repeat rewrite Select_map_equation_2 in *. *)
+(*   rewrite Select_select_equation_2. simpl. *)
+(*   repeat rewrite Select_map_equation_1. *)
+(*   unfold id at 2. *)
+(*   unfold law3_f, law3_h. simpl. *)
+(*   remember ((Either_map (E:=b) (fun (y : A) (f : A -> A) => f y))) as func1. *)
+(*   rewrite Select_Functor_law2. *)
   
 
-  rewrite IH.
-  Check Select_select_equation_2.
-  rewrite Select_select_equation_2. simpl.
-  unfold id.
-  simpl in * |- *.
-  pose (term1 :=
-   (Select_select (Pure (law3_f (inl id)))
-                  (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s)))).
-  pose (term2 :=
-    (fmap[ F] law3_h (fmap[ F] (fun k : b -> A => (fun (y : A) (f : A -> A) => f y) \o k) handler))).
-  assert (H : (Select_map (fun (y : b + A) (f : b + A -> b + A) => f y) s) = s).
-  assert (H : (Select_select (Pure (law3_f (inl id)))
-                             (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s)))
-              = s).
-  {
+(*   rewrite IH. *)
+(*   Check Select_select_equation_2. *)
+(*   rewrite Select_select_equation_2. simpl. *)
+(*   unfold id. *)
+(*   simpl in * |- *. *)
+(*   pose (term1 := *)
+(*    (Select_select (Pure (law3_f (inl id))) *)
+(*                   (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s)))). *)
+(*   pose (term2 := *)
+(*     (fmap[ F] law3_h (fmap[ F] (fun k : b -> A => (fun (y : A) (f : A -> A) => f y) \o k) handler))). *)
+(*   assert (H : (Select_map (fun (y : b + A) (f : b + A -> b + A) => f y) s) = s). *)
+(*   assert (H : (Select_select (Pure (law3_f (inl id))) *)
+(*                              (Select_map law3_g (Select_map (Either_map (fun (y : A) (f : A -> A) => f y)) s))) *)
+(*               = s). *)
+(*   { *)
 
 
-induction x as [| A b s IH handler]; simpl in *; trivial.
-- unfold Select_ap, id in *.
+(* induction x as [| A b s IH handler]; simpl in *; trivial. *)
+(* - unfold Select_ap, id in *. *)
 Admitted.
 Obligation 2.
 (* pure (.) <*> u <*> v <*> w = u <*> (v <*> w) *)
