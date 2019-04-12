@@ -139,6 +139,14 @@ Proof.
   now rewrite <- fmap_comp.
 Qed.
 
+Lemma uncurry_l_1 {A B C : Type} :
+  forall (f : A -> B -> C) (g : A * B -> C) (x : A) (y : B),
+    f x y = g (pair x y) -> (uncurry f) (pair x y) = g (pair x y).
+Proof.
+  intros f g x y H.
+  unfold uncurry. simpl. apply H.
+Qed.
+
 Lemma lemma1_ap {A B C b : Type} `{Functor F} `{FunctorLaws F} :
   forall (u : B -> C) (v : FreeA F b) (f : F (b -> A -> B)) (x : FreeA F A), 
          (* (IH : forall (g : FreeA F (b -> A -> B)), fmap u (g <*> v) = fmap (fun k : A -> B => u \o k) g <*> v), *)
@@ -146,17 +154,26 @@ Lemma lemma1_ap {A B C b : Type} `{Functor F} `{FunctorLaws F} :
 Proof.
   intros u v f x.
   simpl "<*>".
-  repeat rewrite (FreeA_ap_equation_2).
-  simpl.
+  repeat rewrite (FreeA_ap_equation_2). simpl.
+  (* Peel of the MkAp constructor *)
   f_equal.
-  (* Need lemmas about uncurry? *) 
-  rewrite <- fmap_comp.
-  
-(* fmap[ FreeA F] u (MkAp f v <*> x) = fmap[ FreeA F] (fun k : A -> B => u \o k) (MkAp f v) <*> x *)
-
+  (* Now we need to use f_equal again to get read of the outer fmap [ F],
+     but first we need to massage the fmap's arguments in a form that uses explicit
+     function composition \o.*) 
+  remember (fun k : b * A -> B => u \o k) as p.
+  remember (fun k : b -> A -> B => (fun k0 : A -> B => u \o k0) \o k) as q.
+  assert (Htemp: fmap[ F] uncurry (fmap[ F] q f) = fmap[ F] (uncurry \o q) f).
+  { now rewrite <- fmap_comp. } rewrite Htemp. clear Htemp.
+  assert (Htemp : fmap[ F] p (fmap[ F] uncurry f) = fmap[ F] (p \o uncurry) f).
+  { now rewrite <- fmap_comp. } rewrite Htemp. clear Htemp.
+  f_equal.
+  extensionality z.
+  (* Now we need to prove (p \o uncurry) = (uncurry \o q), which, I suppose, should be
+     our inductive hypothesis (if we actually did induction). *)
+Admitted.
 
 (* ∀g :: f (y → a), u :: FreeA f x. *)
-(* fmap ( ◦ h) g :$: u ≡ g :$: fmap h unfold  *)
+(* fmap ( ◦ h) g :$: u ≡ g :$: fmap h  *)
 Lemma lemma1 {A B C : Type} `{Functor F} :
   forall (u : B -> C) (v : FreeA F (A -> B)) (x : FreeA F A),
     fmap u (v <*>x) = fmap (fun k : A -> B => u \o k) v <*> x.
