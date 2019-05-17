@@ -1,4 +1,7 @@
 Require Import Hask.Ltac.
+Require Import FunctionalExtensionality.
+Require Import Coq.Classes.Morphisms.
+Require Import Coq.Setoids.Setoid.
 
 Generalizable All Variables.
 
@@ -22,10 +25,6 @@ Notation "fmap[ M N O ]" :=
   (@fmap (fun X => M (N (O X))) _ _ _) (at level 9).
 
 Module FunctorLaws.
-
-Require Import FunctionalExtensionality.
-Require Import Coq.Classes.Morphisms.
-Require Import Coq.Setoids.Setoid.
 
 (* Functors preserve extensional equality for the applied function.
    This is needed to perform setoid rewriting within the function

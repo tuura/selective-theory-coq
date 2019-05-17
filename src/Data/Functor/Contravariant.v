@@ -1,5 +1,6 @@
 Require Import Hask.Ltac.
 Require Import Hask.Data.Functor.
+Require Import FunctionalExtensionality.
 
 Generalizable All Variables.
 
@@ -30,8 +31,6 @@ Instance Contravariant_Compose `{Functor F} `{Contravariant G} :
 Module ContravariantLaws.
 
 Include FunctorLaws.
-
-Require Import FunctionalExtensionality.
 
 Class ContravariantLaws (f : Type -> Type) `{Contravariant f} := {
   contramap_id   : forall a : Type, contramap (@id a) = id;

@@ -1,6 +1,7 @@
 Require Export Hask.Ltac.
 Require Export Hask.Data.Functor.
 Require Export Hask.Data.Functor.Const.
+Require Import FunctionalExtensionality.
 
 Generalizable All Variables.
 
@@ -43,8 +44,6 @@ Infix "<*" := (liftA2 const) (at level 28, left associativity).
 Module ApplicativeLaws.
 
 Include FunctorLaws.
-
-Require Import FunctionalExtensionality.
 
 Class ApplicativeLaws (f : Type -> Type) `{Applicative f} := {
   has_functor_laws :> FunctorLaws f;
