@@ -315,7 +315,14 @@ Theorem P2 {A B : Type} `{FunctorLaws F} :
   Select_select (Pure (inl x)) y = Select_map (fun k => k x) y.
   (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
 Proof.
+  Set Printing Universes.
+  Check A.
+  Check (A -> B).
   revert A B.
+
+  Check Select_ind.
+  induction y as [| C b s IH handler].
+
   destruct y.
   - reflexivity.
   - rewrite Select_select_equation_2. simpl.
