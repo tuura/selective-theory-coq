@@ -41,6 +41,12 @@ Definition liftA2 `{Applicative m} {A B C : Type}
 Infix "*>" := (liftA2 (const id)) (at level 28, left associativity).
 Infix "<*" := (liftA2 const) (at level 28, left associativity).
 
+
+Lemma sequence_ap `{Applicative F} :
+  forall (A B : Type) (p : F A) (q : F B),
+    p *> q = (const id) <$> p <*> q.
+Proof. reflexivity. Qed.
+
 Module ApplicativeLaws.
 
 Include FunctorLaws.
