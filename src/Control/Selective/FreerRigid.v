@@ -290,12 +290,15 @@ Qed.
 
 (* -- D1 (distributivity): pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z) *)
 (* d1 :: Selective f => Either a b -> f (a -> b) -> f (a -> b) -> f b *)
+(* NB:  This law appers to be a 'theorem' if we only consider rigid selective functos. *)
+(* NB2: The following proof assumes 'pure-left' and 'pure-right'. *)
 Theorem Select_Selective_law2 {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
   forall (A B : Type) (x : A + B) (y : Select F (A -> B)) (z : Select F (A -> B)),
     select (Pure x) (y *> z) = (select (Pure x) y) *> (select (Pure x) z).
 Proof.
   intros A B x y z.
   destruct x.
+  (* x is a Left *)
   - repeat rewrite Select_pure_left.
     repeat rewrite sequence_ap.
     assert (fmap[ Select F] (const id) (fmap[ Select F] (fun f : A -> B => f a) y) <*>
@@ -307,21 +310,65 @@ Proof.
     rewrite fmap_comp.
     unfold comp.
     unfold const.
-    rewrite <- ap_fmap.
+    (* rewrite <- ap_fmap. *)
     assert (fmap[ Select F] (fun _ : A -> B => id) y <*> fmap[ Select F] (fun f : A -> B => f a) z =
             fmap[ Select F] (fun _ : A -> B => id) y <*> (pure[ Select F] (fun f : A -> B => f a) <*> z)).
     { now rewrite ap_fmap. }
-    
-    rewrite <- ap_fmap.
-    assert (fmap[ Select F] (fun f : A -> B => f a) (fmap[ Select F] (fun _ : A -> B => id) y <*> z) =
-            fmap[ Select F] (fun f : A -> B => f a) ((fmap[ Select F] (fun _ : A -> B => id) y) <*> z)).
-    assert ((const id \o (fun f : A -> B => f a)) =
-            )
-
-    assert (fmap[ Select F] (const  id) (fmap[ Select F] (fun f : A -> B => f a) y) =
-            (fmap[ Select F] (const (@id A)) \o fmap[ Select F] (fun f : A -> B => f a)) y).
-    {reflexivity. }
     rewrite H0. clear H0.
+    rewrite <- ap_comp.
+    assert ((pure[ Select F]) (fun (f : B -> B) (g0 : (A -> B) -> B) (x : A -> B) => f (g0 x)) <*>
+             fmap[ Select F] (fun _ : A -> B => id) y <*> (pure[ Select F]) (fun f : A -> B => f a) <*> z =
+            ((fmap[ Select F]) (fun (f : B -> B) (g0 : (A -> B) -> B) (x : A -> B) => f (g0 x))
+              (fmap[ Select F] (fun _ : A -> B => id) y)) <*> (pure[ Select F]) (fun f : A -> B => f a) <*> z).
+    { now rewrite ap_fmap. }
+    rewrite H0. clear H0.
+    assert (fmap[ Select F] (fun (f : B -> B) (g0 : (A -> B) -> B) (x : A -> B) => f (g0 x))
+                 (fmap[ Select F] (fun _ : A -> B => id) y) =
+            fmap[ Select F]
+                ((fun (f : B -> B) (g0 : (A -> B) -> B) (x : A -> B) => f (g0 x)) \o (fun _ : A -> B => id))
+                y).
+    { now rewrite <- fmap_comp. }
+    rewrite H0. clear H0.
+    unfold comp.
+    rewrite ap_interchange.
+    remember (fun f : ((A -> B) -> B) -> (A -> B) -> B => f (fun f0 : A -> B => f0 a)) as p.
+    remember (fun (_ : A -> B) (g0 : (A -> B) -> B) (x0 : A -> B) => id (g0 x0)) as q.
+    assert ((pure[ Select F]) p <*> fmap[ Select F] q y <*> z =
+            (fmap[ Select F]) p (fmap[ Select F] q y) <*> z).
+    { now rewrite ap_fmap. }
+    rewrite H0. clear H0.
+    assert (fmap[ Select F] p (fmap[ Select F] q y) <*> z =
+            fmap[ Select F] (p \o q) y <*> z).
+    { now rewrite <- fmap_comp. }
+    rewrite H0. clear H0.
+    rewrite Heqp. rewrite Heqq. clear Heqp p Heqq q.
+    unfold comp.
+    unfold id.
+    assert (fmap[ Select F] (fun f : A -> B => f a) (fmap[ Select F] (fun _ x : A -> B => x) y <*> z) =
+            pure[ Select F] (fun f : A -> B => f a) <*> (fmap[ Select F] (fun _ x : A -> B => x) y <*> z)).
+    { now rewrite ap_fmap. }
+    rewrite H0. clear H0.
+    rewrite <- ap_comp.
+    remember (fun (f : (A -> B) -> B) (g0 : (A -> B) -> A -> B) (x : A -> B) => f (g0 x)) as p.
+    remember (fun f : A -> B => f a) as q.
+    remember (fun _ x : A -> B => x) as r.
+    assert ((pure[ Select F]) p <*> (pure[ Select F]) q <*> fmap[ Select F] r y <*> z =
+            ((pure[ Select F]) (p q)) <*> fmap[ Select F] r y <*> z).
+    { now rewrite ap_homo. }
+    rewrite H0. clear H0.
+    assert ((pure[ Select F]) (p q) <*> fmap[ Select F] r y <*> z =
+            (fmap[ Select F]) (p q) (fmap[ Select F] r y) <*> z).
+    { now rewrite ap_fmap. }
+    rewrite H0. clear H0.
+    assert (fmap[ Select F] (p q) (fmap[ Select F] r y) <*> z =
+            fmap[ Select F] ((p q) \o r) y <*> z).
+    { now rewrite <- fmap_comp. }
+    rewrite H0. clear H0.
+    rewrite Heqp. rewrite Heqq. rewrite Heqr. clear Heqp r Heqq q Heqr r.
+    reflexivity.
+  (* x is a Right *)
+  - now repeat rewrite Select_pure_right.
+Qed.
 
 (* -- D1 (distributivity): pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z) *)
 (* d1 :: Selective f => Either a b -> f (a -> b) -> f (a -> b) -> f b *)
