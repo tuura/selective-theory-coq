@@ -9,6 +9,8 @@ Class Functor (f : Type -> Type) : Type := {
   fmap : forall {a b : Type}, (a -> b) -> f a -> f b
 }.
 
+Check fmap.
+
 Arguments fmap {f _ a b} g x.
 
 Infix "<$>" := fmap (at level 28, left associativity, only parsing).

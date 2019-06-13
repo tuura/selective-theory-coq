@@ -41,6 +41,11 @@ Arguments MkSelect {F} {A} {X}.
     (* fmap f (Pure a)     = Pure (f a) *)
     (* fmap f (Select x y) = Select (bimap (f.) f <$> x) y *)
 
+Definition f_ap {A B : Type}
+  (f : A -> B) (x : A) := f x.
+
+Definition rev_f_ap {A B : Type}
+  (x : A) (f : A -> B) := f x.
 
 (******************************************************************************)
 (************************ Functor and FunctorLaws *****************************)
@@ -139,25 +144,25 @@ Definition g {A B C D E : Type}
   (((D -> B) + B) -> ((D -> C) + C)) + (E + C) :=
   match f a with
   | inr r => Right (Right r)
-  | inl l => Left  (Either_bimap (fun k => l \o k) l)
+  | inl l => Left  (Either_bimap (comp l) l)
   end.
 
 Equations Select_selectBy {A B C : Type} {F : Type -> Type}
           (f : A -> ((B -> C) + C))
           (x : Select F A)
           (a : Select F B) : Select F C :=
-Select_selectBy f x (Pure y)       := (either (fun k => k y) id \o f) <$> x;
+Select_selectBy f x (Pure y)       := (either (rev_f_ap y) id \o f) <$> x;
 Select_selectBy f x (MkSelect y z) := MkSelect (Select_selectBy (g f) x y) z.
 
 Definition Select_select {A B : Type} {F : Type -> Type}
            (x : Select F (A + B))
            (handler : Select F (A -> B)) : Select F B :=
-  Select_selectBy (mapLeft (fun x f => f x)) x handler.
+  Select_selectBy (mapLeft rev_f_ap) x handler.
 
 (* select (Left <$> f) (flip ($) <$> x) *)
 Definition Select_ap {A B : Type} {F : Type -> Type}
            (f : Select F (A -> B)) (x : Select F A) : Select F B :=
-  Select_select (Left <$> f) ((fun x f => f x) <$> x).
+  Select_select (Left <$> f) (rev_f_ap <$> x).
 
 Program Instance Select_Applicative
         (F : Type -> Type) : Applicative (Select F) :=
@@ -238,7 +243,7 @@ Proof. trivial. Qed.
 (* p2 x y = select (pure (Left  x)) y === y <*> pure x *)
 Theorem Select_pure_left {F : Type -> Type} :
   forall (A B : Type) (x : A) (y : Select F (A -> B)),
-    select (pure (Left x)) y = (fun f => f x) <$> y.
+    select (pure (Left x)) y = (rev_f_ap x) <$> y.
 Admitted.
 
 (* -- P3 (does not generally hold): select (pure (Right x)) y = pure x *)
@@ -249,12 +254,22 @@ Admitted.
 (*     select (pure (Right x)) y = Pure x. *)
 (* Admitted. *)
 
+Print arrow.
+
+Program Instance Coq_Function_Functor (Domain : Type) : Functor (arrow Domain) := {
+  fmap x y f g := f \o g
+}.
+
+Check (fmap[ arrow nat]).
+Compute ((fmap (fun x => S x) (const (S 0))) 0).
+
 (* -- F1 (Free): f <$> select x y = select (fmap f <$> x) (fmap f <$> y) *)
 (* f1 :: Selective f => (b -> c) -> f (Either a b) -> f (a -> b) -> f c *)
 (* f1 f x y = f <$> select x y === select (fmap f <$> x) (fmap f <$> y) *)
 Theorem Select_free_1 {F : Type -> Type} :
   forall (A B C : Type) (f : B -> C) (x : Select F (A + B)) (y : Select F (A -> B)),
-    f <$> select x y = select (Either_map f <$> x) ((fun g : A -> B => f \o g) <$> y).
+    f <$> select x y = select (fmap f <$> x)
+                              ((fun g : A -> B => f \o g) <$> y).
 Admitted.
 
 (* -- F2 (Free): select (first f <$> x) y = select x ((. f) <$> y) *)
@@ -272,7 +287,7 @@ Theorem Select_free_3 {F : Type -> Type} :
   forall (A B C : Type) (f : C -> A -> B)
                         (x : Select F (A + B))
                         (y : Select F C),
-    select x (f <$> y) = select (mapLeft (flip f) <$> x) ((fun a k => k a) <$> y).
+    select x (f <$> y) = select (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
 Admitted.
 
 (* -- P1id (Identity): select x (pure id) == either id id <$> x *)
@@ -290,10 +305,120 @@ Proof.
   destruct x0; trivial.
 Qed.
 
+Definition law3_f {A B C : Type}
+           (x : B + C) : B + (A + C) := Right <$> x.
+
+Definition law3_g {A B C : Type}
+           (y : A + (B -> C)) : B -> A * B + C :=
+  fun a => Either_bimap (fun p => pair p a) (rev_f_ap a) y.
+
+Definition law3_h  {A B C : Type}
+           (z : A -> B -> C) : A * B -> C := uncurry z.
+
+Theorem Select_Selective_law3_assoc
+  {A B C : Type} {F : Type -> Type}
+  (x : Select F (B + C))
+  (y : Select F (A + (B -> C)))
+  (z : Select F (A -> B -> C)) :
+  x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z).
+Proof.
+Admitted.
+
+Lemma Select_select_to_infix :
+  forall (A B : Type) (F : Type -> Type)
+  (x : Select F (A + B)%type) (y : Select F (A -> B)),
+  Select_select x y = x <*? y.
+Proof. reflexivity. Qed.
+
+Lemma Select_map_to_fmap :
+  forall (A B : Type) (F : Type -> Type)
+  (x : Select F A) (f : A -> B),
+  Select_map f x = fmap f x.
+Proof. reflexivity. Qed.
+
+(* This is a proof of the (Pure Right) case of the distributivity theorem for rigid
+   selective functors. Assumes the associativity law. *)
+Lemma Select_Selective_law2_case_right {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
+  forall (A B : Type) (x : B) (y : Select F (A -> B)) (z : Select F (A -> B)),
+    select (Pure (Right x)) (y *> z) = (select (Pure (Right x)) y) *> (select (Pure (Right x)) z).
+Proof.
+  intros A B x y z.
+  repeat rewrite sequence_ap.
+  simpl "<*>".
+  unfold Select_ap.
+  repeat rewrite Select_select_to_infix.
+  repeat rewrite Select_map_to_fmap.
+  repeat rewrite fmap_comp_x.
+  remember (  Pure (inr x) <*?
+                   (fmap[ Select F] (fun y0 : A -> B => inl (const id y0)) y <*?
+                        fmap[ Select F] rev_f_ap z)) as lhs.
+  remember (fmap[ Select F] (fun y0 : B => inl (const id y0)) (Pure (inr x) <*? y) <*?
+                fmap[ Select F] rev_f_ap (Pure (inr x) <*? z)) as rhs.
+  rewrite Select_Selective_law3_assoc in Heqlhs.
+  repeat rewrite fmap_comp_x in Heqlhs.
+  repeat rewrite Select_free_1 in Heqrhs.
+  rewrite Select_Selective_law3_assoc in Heqrhs.
+  repeat rewrite fmap_comp_x in Heqrhs.
+  remember (fmap[ Select F] (fun y : A + B => law3_g (fmap[ sum A] rev_f_ap y))
+             (Pure (inr x))) as p.
+  simpl in Heqp. simp Select_map in Heqp. simpl Either_map in Heqp.
+  rewrite Heqp in Heqrhs. clear Heqp p.
+  remember (fmap[ Select F] law3_f
+             (fmap[ Select F] (fmap[ sum A] (fun y0 : B => inl (const id y0)))
+                (Pure (inr x)) <*?
+         fmap[ Select F] (fun g : A -> B => (fun y0 : B => inl (const id y0)) \o g) y)) as p.
+  assert (p <*? Pure (law3_g (inr (rev_f_ap x))) =
+          either (law3_g (inr (rev_f_ap x))) id <$> p).
+  { now rewrite Select_Selective_law1. }
+  rewrite H0 in Heqrhs. clear H0.
+  rewrite Heqp in Heqrhs. clear Heqp p.
+  repeat rewrite fmap_comp_x in Heqrhs.
+  rewrite Select_free_1 in Heqrhs.
+  repeat rewrite fmap_comp_x in Heqrhs.
+  remember (fmap[ Select F]
+             (fun y : A + B =>
+              fmap[ sum A]
+                (fun y0 : (B -> B) + B => either (law3_g (inr (rev_f_ap x))) id (law3_f y0))
+                (fmap[ sum A] (fun y0 : B => inl (const id y0)) y)) 
+             (Pure (inr x))) as p.
+  compute in Heqp. simp Select_map in Heqp. rewrite Heqp in Heqrhs. clear Heqp p.
+  remember (fmap[ Select F] law3_f (Pure (inr x))) as p.
+  compute in Heqp. simp Select_map in Heqp. rewrite Heqp in Heqlhs. clear Heqp p.
+  (* rewrite Select_free_3 in Heqlhs. *)
+  remember (fun y : A -> B => law3_g (inl (const id y))) as p_lhs.
+  remember (fun y : A -> B => law3_h (rev_f_ap y)) as q_lhs.
+  rewrite Select_free_3 in Heqlhs, Heqrhs.
+  rewrite Select_free_1 in Heqlhs, Heqrhs.
+  rewrite Heqrhs. clear Heqrhs rhs.
+  rewrite Heqlhs. clear Heqlhs lhs.
+  f_equal.
+  rewrite Heqp_lhs. clear Heqp_lhs p_lhs.
+  rewrite Heqq_lhs. clear Heqq_lhs q_lhs.
+  rewrite fmap_comp_x.
+  set (p_lhs := (fmap[ sum A] (mapLeft (flip (fun y0 : A -> B => law3_h (rev_f_ap y0)))))).
+  set (q_lhs := (fun y0 : A -> B =>
+     mapLeft (flip (fun y1 : A -> B => law3_h (rev_f_ap y1))) \o law3_g (inl (const id y0)))).
+  rewrite fmap_comp_x.
+  set (p_rhs := (fmap[ sum A] (mapLeft (flip (fun y0 : A -> B => law3_h (rev_f_ap \o y0)))))).
+  set (q_rhs := (fun y0 : A -> B =>
+     mapLeft (flip (fun y1 : A -> B => law3_h (rev_f_ap \o y1))) \o
+     ((fun y1 : (B -> B) + B => either (law3_g (inr (rev_f_ap x))) id (law3_f y1)) \o
+      ((fun y1 : B => inl (const id y1)) \o y0)))).
+  remember (fmap[ Select F] p_lhs (Pure (inr (inr x))) <*? fmap[ Select F] q_lhs y)
+    as lhs.
+  remember (fmap[ Select F] p_rhs (Pure (inr (inr x))) <*? fmap[ Select F] q_rhs y)
+    as rhs.
+  rewrite Select_free_3 in Heqlhs, Heqrhs.
+  rewrite fmap_comp_x in Heqlhs, Heqrhs.
+  rewrite Heqrhs. clear Heqrhs rhs.
+  rewrite Heqlhs. clear Heqlhs lhs.
+  f_equal.
+Qed.
+
 (* -- D1 (distributivity): pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z) *)
 (* d1 :: Selective f => Either a b -> f (a -> b) -> f (a -> b) -> f b *)
 (* NB:  This law appers to be a 'theorem' if we only consider rigid selective functos. *)
-(* NB2: The following proof assumes 'pure-left' and 'pure-right'. *)
+(* NB2: The following proof assumes 'pure-left' and the associativity law (law 3) *)
 Theorem Select_Selective_law2 {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
   forall (A B : Type) (x : A + B) (y : Select F (A -> B)) (z : Select F (A -> B)),
     select (Pure x) (y *> z) = (select (Pure x) y) *> (select (Pure x) z).
@@ -369,224 +494,8 @@ Proof.
     rewrite Heqp. rewrite Heqq. rewrite Heqr. clear Heqp r Heqq q Heqr r.
     reflexivity.
   (* x is a Right *)
-  - admit.
-    (* now repeat rewrite Select_pure_right. *)
-Admitted.
-
-Definition law3_f {A B C : Type}
-           (x : B + C) : B + (A + C) := Right <$> x.
-
-Definition law3_g {A B C : Type}
-           (y : A + (B -> C)) : B -> A * B + C :=
-  fun a => Either_bimap (fun p => pair p a) (fun f => f a) y.
-
-Definition law3_h  {A B C : Type}
-           (z : A -> B -> C) : A * B -> C := uncurry z.
-
-Theorem Select_Selective_law3_assoc
-  {A B C : Type} {F : Type -> Type}
-  (x : Select F (B + C))
-  (y : Select F (A + (B -> C)))
-  (z : Select F (A -> B -> C)) :
-  x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z).
-Proof.
-Admitted.
-
-Theorem Select_Selective_law2_no_pure_right {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
-  forall (A B : Type) (x : B) (y : Select F (A -> B)) (z : Select F (A -> B)),
-    select (Pure (Right x)) (y *> z) = (select (Pure (Right x)) y) *> (select (Pure (Right x)) z).
-Proof.
-  intros A B x y z.
-  repeat rewrite sequence_ap.
-  simpl "<*>".
-  unfold Select_ap.
-  (* rewrite the left-hand-side *)
-  assert (  select (Pure (inr x))
-    (Select_select (fmap[ Select F] inl (Select_map (const id) y))
-                   (fmap[ Select F] (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) z)) =
-              select (Pure (inr x))
-    (select (fmap[ Select F] inl (fmap[ Select F] (const id) y))
-            (fmap[ Select F] (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) z))).
-  { reflexivity. }
-  rewrite H0. clear H0.
-  rewrite Select_Selective_law3_assoc.
-  remember (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) as p.
-  assert (select
-    (select (fmap[ Select F] law3_f (Pure (inr x)))
-       (fmap[ Select F] law3_g (fmap[ Select F] inl (fmap[ Select F] (const id) y))))
-    (fmap[ Select F] law3_h (fmap[ Select F] p z)) =
-            select
-    (select (fmap[ Select F] law3_f (Pure (inr x)))
-       (fmap[ Select F] (law3_g \o inl \o (const id)) y))
-    (fmap[ Select F] (law3_h \o p) z)).
-  { now repeat rewrite fmap_comp_x. }
-  rewrite H0. clear H0.
-
-  (* rewrite the right-hand-side *)
-  assert (Select_select (fmap[ Select F] inl (Select_map (const id) (Select_select (Pure (inr x)) y)))
-                        (fmap[ Select F] (fun (x0 : B) (f : B -> B) => f x0) (Select_select (Pure (inr x)) z)) =
-          select (fmap[ Select F] inl (fmap[ Select F] (const id) (select (Pure (inr x)) y)))
-                 (fmap[ Select F] (fun (x0 : B) (f : B -> B) => f x0) (select (Pure (inr x)) z))).
-  { reflexivity. }
-  rewrite H0. clear H0.
-  assert (select (fmap[ Select F] inl (fmap[ Select F] (const id) (select (Pure (inr x)) y)))
-                 (fmap[ Select F] (fun (x0 : B) (f : B -> B) => f x0) (select (Pure (inr x)) z)) =
-          select (fmap[ Select F] (inl \o (const id)) (select (Pure (inr x)) y))
-                 (fmap[ Select F] (fun (x0 : B) (f : B -> B) => f x0) (select (Pure (inr x)) z))).
-  { now rewrite fmap_comp_x. }
-  rewrite H0. clear H0.
-  remember (fun (x0 : B) (f : B -> B) => f x0) as q.
-  assert ((fmap q (select (Pure (inr x)) z)) =
-          ((select (fmap (Either_map q) (Pure (inr x))) (fmap (fun g : A -> B => q \o g) z)))).
-  { now rewrite Select_free_1. }
-  rewrite H0. clear H0.
-  assert ( select (fmap (inl \o const id) (select (Pure (inr x)) y))
-                  (select (fmap (Either_map q) (Pure (inr x)))
-                          (fmap (fun g0 : A -> B => q \o g0) z)) =
-           select ((select (fmap (Either_map (inl \o const id)) (Pure (inr x)))
-                           (fmap ((fun g : A -> B => (inl \o const id) \o g)) y)))
-                  (select (fmap (Either_map q) (Pure (inr x)))
-                          (fmap (fun g0 : A -> B => q \o g0) z))).
-  { now rewrite Select_free_1. }
-  rewrite H0. clear H0.
-
-  rewrite Select_Selective_law3_assoc.
-  remember ((fmap[ Select F] law3_g (fmap[ Select F] (Either_map q) (Pure (inr x))))) as t.
-  rewrite fmap_comp_x in Heqt.
-  simpl in Heqt.
-  simp Select_map in Heqt.
-  unfold law3_g in Heqt. unfold Either_bimap in Heqt. unfold Either_map in Heqt.
-  rewrite Heqq in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember (fmap[ Select F] (Either_map (inl \o const id)) (Pure (inr x))) as t.
-  simpl in Heqt. simp Select_map in Heqt. unfold Either_map in Heqt.
-  unfold comp in Heqt. unfold const in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember (fmap[ Select F] law3_f
-                (select (Pure (inr (inl id))) (fmap[ Select F] (fun g0 : A -> B => (inl \o const id) \o g0) y))) as t.
-  remember (select t (Pure (fun a : B -> B => inr (a x)))) as m.
-  rewrite Select_Selective_law1 in Heqm.
-  rewrite Heqm. clear Heqm m.
-  rewrite Heqt. clear Heqt t.
-  rewrite fmap_comp_x.
-  rewrite Select_free_1.
-  remember ((fmap[ Select F] (Either_map (fun y0 : (B -> B) + B => either (fun a : B -> B => inr (a x)) id (law3_f y0))) (Pure (inr (inl id))))) as t.
-  simpl in Heqt.
-  simp Select_map in Heqt.
-  unfold Either_map in Heqt.
-  unfold either in Heqt.
-  unfold law3_f in Heqt.
-  simpl in Heqt.
-  unfold id in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember (fmap[ Select F] law3_f (Pure (inr x))) as t.
-  simpl in Heqt. unfold law3_f in Heqt. simp Select_map in Heqt.
-  simpl in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember (fmap[ Select F]
-          (fun g0 : A -> (B -> B) + B =>
-           (fun y0 : (B -> B) + B => either (fun a : B -> B => inr (a x)) id (law3_f y0)) \o
-           g0) (fmap[ Select F] (fun g0 : A -> B => (inl \o const id) \o g0) y)) as t.
-  rewrite fmap_comp_x in Heqt.
-  unfold comp in Heqt. unfold const in Heqt. unfold law3_f in Heqt.
-  simpl (fmap[ sum (B -> B)]) in Heqt. unfold Either_map in Heqt.
-  unfold either in Heqt. unfold id in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember  (fmap[ Select F] law3_h (fmap[ Select F] (fun g0 : A -> B => q \o g0) z)) as t.
-  rewrite fmap_comp_x in Heqt.
-  rewrite Heqq in Heqt. unfold comp in Heqt. unfold law3_h in Heqt.
-  rewrite Heqt. clear Heqt t.
-  remember (select (select (Pure (inr (inr x)))
-                           (fmap[ Select F] ((law3_g \o inl) \o const id) y))
-                   (fmap[ Select F] (law3_h \o p) z)) as lhs.
-  remember (select
-              (select (Pure (inr (inr x)))
-                      (fmap[ Select F] (fun (_ : A -> B) (_ : A) => inr x) y))
-              (fmap[ Select F] (fun y0 : A -> B => uncurry (fun (x0 : A) (f : B -> B)
-                                                            => f (y0 x0))) z)) as rhs.
-  rewrite Select_free_3 in Heqlhs.
-  rewrite Select_free_3 in Heqrhs.
-  rewrite Heqrhs. clear Heqrhs rhs.
-  rewrite Heqlhs. clear Heqlhs lhs.
-  (* Now the goal is `select x' y1 z' = select x' y2 z'`, so we apply f_eqaul *)
-  (* to transform the goal into y1 = y2: *)
-  f_equal.
-  rewrite Heqp. clear Heqp p. clear Heqq q.
-  unfold law3_h. unfold comp. unfold law3_g. unfold Either_bimap.
-  unfold const. unfold id.
-  repeat rewrite Select_free_1.
-  f_equal.
-  repeat rewrite fmap_comp_x.
-  f_equal.
-  unfold law3_h. unfold law3_g. unfold comp. unfold const. unfold id.
-  unfold flip. unfold mapLeft. unfold Either_bimap.
-  unfold uncurry.
-  extensionality f.
-  extensionality x0.
-  simpl.
-  (* Unfortunately, now the goal appears to be unprovable: *)
-  (* inl (fun x1 : A -> B => x1 x0) = inr x *)
-
-
-Theorem Select_Selective_law2_no_pure_right {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
-  forall (A B : Type) (x : B) (y : Select F (A -> B)) (z : Select F (A -> B)),
-    select (Pure (Right x)) (y *> z) = (select (Pure (Right x)) y) *> (select (Pure (Right x)) z).
-Proof.
-  intros A B x y z.
-  repeat rewrite sequence_ap.
-  simpl "<*>".
-  unfold Select_ap.
-  assert (  select (Pure (inr x))
-    (Select_select (fmap[ Select F] inl (Select_map (const id) y))
-                   (fmap[ Select F] (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) z)) =
-              select (Pure (inr x))
-    (select (fmap[ Select F] inl (fmap[ Select F] (const id) y))
-            (fmap[ Select F] (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) z))).
-  { reflexivity. }
-  rewrite H0. clear H0.
-  remember (fun (x0 : A -> B) (f : (A -> B) -> A -> B) => f x0) as p.
-  rewrite Select_Selective_law3_assoc.
-  repeat rewrite fmap_comp_x.
-  unfold law3_g.
-  unfold Either_bimap.
-  unfold law3_h.
-  assert (Select_select (fmap[ Select F] inl (Select_map (const id) (Select_select (Pure (inr x)) y)))
-                        (fmap[ Select F] (fun (x0 : B) (f : B -> B) => f x0) (Select_select (Pure (inr x)) z)) =
-          select (fmap inl (fmap (const id) (select (Pure (inr x)) y)))
-                 (fmap (fun (x0 : B) (f : B -> B) => f x0) (select (Pure (inr x)) z))).
-  { reflexivity. }
-  rewrite H0. clear H0.
-  rewrite fmap_comp_x.
-  remember ((fun y0 : B => inl (const id y0))) as q.
-  remember (fun (x0 : B) (f : B -> B) => f x0) as r.
-  assert ((fmap[ Select F] r (select (Pure (inr x)) z)) =
-          (select ((Either_map r) <$> (Pure (inr x))) ((fun g : A -> B => r \o g) <$> z))).
-  { now rewrite Select_free_1. }
-  rewrite H0. clear H0.
-  rewrite Select_Selective_law3_assoc.
-  repeat rewrite fmap_comp_x.
-  unfold law3_h.
-  remember ((fmap[ Select F] (fun y0 : A + B => law3_g (Either_map r y0)) (Pure (inr x)))) as m.
-  simpl in Heqm. simp Select_map in Heqm.
-  unfold law3_g in Heqm. unfold Either_map in Heqm. unfold Either_bimap in Heqm. rewrite Heqr in Heqm.
-  rewrite Heqm. clear Heqm m.
-(* Select_Selective_law1 *)
-(*      : forall (A0 B0 : Type) (x0 : Select ?F (A0 + B0)) (y0 : A0 -> B0), *)
-(*        select x0 (Pure y0) = fmap[ Select ?F] (either y0 id) x0 *)
-  rewrite Select_Selective_law1.
-  rewrite fmap_comp_x.
-  rewrite Heqp. rewrite Heqq. rewrite Heqr. clear Heqp p Heqq q Heqr r.
-  unfold law3_f.
-  rewrite Select_free_1.
-  unfold comp.
-  remember (fun y0 : A -> B => uncurry (fun f : (A -> B) -> A -> B => f y0)) as p.
-  remember (fun y0 : A -> B => uncurry (fun (x0 : A) (f : B -> B) => f (y0 x0))) as q.
-  assert ((fun y0 : A -> B => uncurry (fun f : (A -> B) -> A -> B => f y0)) =
-          (fun y0 : A -> B => uncurry (fun (x0 : A) (f : B -> B) => f (y0 x0)))).
-  unfold Either_map.
-  simpl.
-  
-  unfold either.
+  - apply Select_Selective_law2_case_right.
+Qed.
 
 (* To prove applicative laws we, again, must (?) assume pure-left *)
 Theorem Select_Applicative_law1 {F : Type -> Type} :
