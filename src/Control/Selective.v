@@ -19,7 +19,7 @@ Class Selective (f : Type -> Type) := {
 
 Arguments select {f _ _ _} _ x.
 
-Infix "<*?" := select (at level 28, left associativity, only parsing).
+Infix "<*?" := select (at level 28, left associativity).
 
 (* apS :: Selective f => f (a -> b) -> f a -> f b *)
 (* apS f x = select (Left <$> f) (flip ($) <$> x) *)
