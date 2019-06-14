@@ -55,7 +55,16 @@ Definition Either_bimap {A B X Y} (f : A -> B) (g : X -> Y) (x : Either A X) : E
   | Right x => Right (g x)
   end.
 
-Definition Either_apply {E X Y} (f : Either E (X -> Y)) (x : Either E X)
+Lemma Either_bimap_id :
+  forall (A B : Type),
+    Either_bimap (@id A) (@id B) = id.
+Proof.
+  intros A B.
+  extensionality x.
+  destruct x; trivial.
+Qed.
+
+Definition Either_ap {E X Y} (f : Either E (X -> Y)) (x : Either E X)
   : Either E Y :=
   match f with
   | Left e   => Left e
@@ -75,34 +84,29 @@ Definition Either_join {E X} (x : Either E (Either E X)) : Either E X :=
 Instance Either_Functor {E} : Functor (Either E) :=
 { fmap := @Either_map E
 }.
-(* jww (2015-06-17): NYI
-Proof.
-  - (* fun_identity *)
-    intros. extensionality x. compute. destruct x; reflexivity.
-  - (* fun_composition *)
-    intros. extensionality x. compute. destruct x; reflexivity.
+
+Import FunctorLaws.
+
+Program Instance Either_FunctorLaws {E} : FunctorLaws (Either E).
+Obligation 1.
+extensionality x. now destruct x.
 Defined.
-*)
+Obligation 2.
+extensionality x. now destruct x.
+Defined.
 
 Instance Either_Applicative {E} : Applicative (Either E) :=
 { is_functor := Either_Functor
 ; pure := @Right E
-; ap := @Either_apply E
+; ap := @Either_ap E
 }.
-(* jww (2015-06-17): NYI
-Proof.
-  - (* app_identity *)
-    intros. extensionality x. compute. destruct x; reflexivity.
-  - (* app_composition *)
-    intros. compute.
-    destruct u.
-      destruct v; reflexivity.
-      destruct v. reflexivity. destruct w; reflexivity.
-  - (* app_homomorphism *)
-    intros. compute. reflexivity.
-  - (* app_interchange *)
-    intros. compute. destruct u; reflexivity.
-  - (* app_fmap_unit *)
-    intros. extensionality x. compute. destruct x; reflexivity.
+
+Import ApplicativeLaws.
+
+Program Instance Either_ApplicativeLaws {E} : ApplicativeLaws (Either E).
+Obligation 1.
+extensionality x. now destruct x.
 Defined.
-*)
+Obligation 2.
+destruct w; destruct v; destruct u; trivial.
+Defined.
