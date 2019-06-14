@@ -11,3 +11,4 @@ src/Control/Selective.v
 src/Data/Over.v
 src/Data/Under.v
 src/Data/Validation.v
+src/Control/Selective/FreerRigid.v

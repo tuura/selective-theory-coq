@@ -173,34 +173,46 @@ Lemma Select_map_to_fmap :
   Select_map f x = fmap f x.
 Proof. reflexivity. Qed.
 
-(* -- P2 (does not generally hold): select (pure (Left x)) y = ($x) <$> y *)
 (* p2 :: Selective f => a -> f (a -> b) -> f b *)
 (* p2 x y = select (pure (Left  x)) y === y <*> pure x *)
+(* This theorem can be proved for any rigid selective functor, i.e. if apS = (<*>) *)
 Theorem Select_pure_left {F : Type -> Type} :
   forall (A B : Type) (x : A) (y : Select F (A -> B)),
     select (pure (Left x)) y = (rev_f_ap x) <$> y.
 Proof.
   intros A B x y.
+  (* The idea of the proof is to massage the goal into the form of the definition of Select_ap,
+     fold the definition, substitute it with the applicative <*> and finish the prove using
+     the Applicative laws. *)
+
+  (* First, we use fmap_id to append an id application to the second argument of select *)
   assert ( select (Pure (inl x)) y =
            select (Pure (inl x)) (fmap id y)).
   { now rewrite fmap_id. }
   rewrite H. clear H.
+  (* Now we use the third Selective Free Theorem to transfer the newly created id to the first argument
+     of select and leave the second fmap'ed by the reverse function application *)
   rewrite Select_free_3.
+  (* Drag the id inside Pure *)
   remember (fmap[ Select F] (mapLeft (flip id)) (Pure (inl x))) as p.
   compute in Heqp. simp Select_map in Heqp.
   rewrite Heqp. clear Heqp p.
+  (* Use ap_homo to extract inl (aka Left) from Pure *)
   assert (Pure (inl (fun x0 : A -> B => x0 x)) <*? fmap[ Select F] rev_f_ap y =
           pure inl <*> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y).
   { now rewrite ap_homo. }
   rewrite H. clear H.
+  (* Use ap_fmap to rewrite `pure inl <*>` as `inl <$>` *) 
   assert (pure inl <*> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y =
           inl <$> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y).
   { now rewrite ap_fmap. }
   rewrite H. clear H.
+  (* Fold reverse function application *)
   assert (inl <$> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y =
           inl <$> Pure (rev_f_ap x) <*? fmap[ Select F] rev_f_ap y).
   { reflexivity. }
   rewrite H. clear H.
+  (* Unfold <*? to make the goal identical to Select_ap definition *)
   simpl "<*?".
   rewrite Select_map_to_fmap.
   remember (Pure (rev_f_ap x)) as g.
@@ -208,16 +220,15 @@ Proof.
           Select_ap g y).
   { reflexivity. }
   rewrite H. clear H.
+  (* Use the rigidness of the freer selective construction, i.e. the fact that
+     Select_ap == apS == (<*>) *)
   assert (Select_ap g y = g <*> y).
   { reflexivity. }
   rewrite H. clear H.
   rewrite Heqg. clear Heqg g.
+  (* Now the proof can be finished using the Applicative law ap_fmap *)
   now rewrite ap_fmap.
 Qed.
-
-(* Definition Select_ap {A B : Type} {F : Type -> Type} *)
-(*            (f : Select F (A -> B)) (x : Select F A) : Select F B := *)
-(*   Select_select (Left <$> f) (rev_f_ap <$> x). *)
 
 (* -- P1id (Identity): select x (pure id) == either id id <$> x *)
 Theorem Select_Selective_law1 {F : Type -> Type} :
