@@ -5,7 +5,6 @@ Require Import Data.Monoid.
 Require Import Data.Functor.
 Require Import Control.Applicative.
 Require Import Control.Selective.
-(* Require Import Data.Over. *)
 Require Import Coq.Strings.String.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Classes.Morphisms.
@@ -15,37 +14,13 @@ Require Import Omega.
 From Equations Require Import Equations.
 
 Generalizable All Variables.
-(* Functors preserve extensional equality for the applied function.
-   This is needed to perform setoid rewriting within the function
-   passed to a functor. *)
-Add Parametric Morphism {A B} `{Functor F} : (@fmap F _ A B)
-  with signature (pointwise_relation _ eq ==> eq ==> eq)
-    as mul_isomorphism.
-Proof.
-  intros.
-  f_equal.
-  extensionality e.
-  apply H0.
-Qed.
 
-(* Inductive Select (f : Type -> Type) (a : Type) := *)
-(*     Pure   : a -> Select f a *)
-(*   | MkSelect : forall b, Select f (b + a) -> f (b -> a) -> Select f a. *)
 Inductive Select (F : Type -> Type) (A : Type) :=
     Pure   : A -> Select F A
   | MkSelect : forall X, Select F ((X -> A) + A) -> F X -> Select F A.
 
 Arguments Pure {F} {A}.
 Arguments MkSelect {F} {A} {X}.
-
-    (* fmap f (Pure a)     = Pure (f a) *)
-    (* fmap f (Select x y) = Select (bimap (f.) f <$> x) y *)
-
-Definition f_ap {A B : Type}
-  (f : A -> B) (x : A) := f x.
-
-Definition rev_f_ap {A B : Type}
-  (x : A) (f : A -> B) := f x.
 
 (******************************************************************************)
 (************************ Functor and FunctorLaws *****************************)
@@ -60,39 +35,7 @@ Program Instance Select_Functor (F : Type -> Type) : Functor (Select F) := {
   fmap := fun _ _ f x => Select_map f x
 }.
 
-(* Auxiliary lemmas for proving Functor laws *)
-Definition id_f {A : Type} (x : A) := x.
-
-Lemma id_x_is_x {A : Type}:
-  forall (x : A), id x = x.
-Proof. intros x. reflexivity. Qed.
-
-Lemma id_comp {A B : Type}:
-  forall (f : A -> B), (id \o f) = f.
-Proof.
-  intros f.
-  extensionality x.
-  now unfold comp.
-Qed.
-
 Import FunctorLaws.
-
-Lemma fmap_rewrite_compose {A B C : Type} `{Functor F} :
-  forall (f : B -> C) (g : A -> B) (x : F A),
-    fmap f (fmap g x) = (fmap f \o fmap g) x.
-Proof.
-  intros f g x.
-  reflexivity.
-Qed.
-
-Lemma bimap_id :
-  forall (A B : Type),
-    Either_bimap (@id A) (@id B) = id.
-Proof.
-  intros A B.
-  extensionality x.
-  destruct x; trivial.
-Qed.
 
 Program Instance Select_FunctorLaws : FunctorLaws (Select F).
 (* Theorem Select_Functor_law1 {A : Type} *)
@@ -109,7 +52,7 @@ f_equal.
 assert (forall A, (fun x0 : A => x0) = id).
 { reflexivity. }
 repeat rewrite H1 in *.
-rewrite bimap_id.
+rewrite Either_bimap_id.
 now rewrite IHx.
 Qed.
 (* Theorem Select_Functor_law2 {A B C : Type} *)
@@ -159,7 +102,7 @@ Definition Select_select {A B : Type} {F : Type -> Type}
            (handler : Select F (A -> B)) : Select F B :=
   Select_selectBy (mapLeft rev_f_ap) x handler.
 
-(* select (Left <$> f) (flip ($) <$> x) *)
+
 Definition Select_ap {A B : Type} {F : Type -> Type}
            (f : Select F (A -> B)) (x : Select F A) : Select F B :=
   Select_select (Left <$> f) (rev_f_ap <$> x).
@@ -189,72 +132,7 @@ Admitted.
 Obligation 5.
 Admitted.
 
-(* (forall (F : Type -> Type) (H : Functor F), *)
-(*  FunctorLaws F -> forall a : Type, ap[ Select F] ((pure[ Select F]) id) = id). *)
-(* pure id <*> v = v   *)
-
-Polymorphic Definition pid {A : Type} (a : A) := a.
-
-Lemma either_left :
-  forall (A B C : Type) (f : A -> C) (g : B -> C),
-  (either f g) \o inl = f.
-Proof.
-  intros A B C f g.
-  extensionality x.
-  trivial.
-Qed.
-
-Lemma id_is_unique :
-  forall (A : Type) (f : A -> A), f = id.
-Admitted.
-
-Require Import Coq.Program.Equality.
-Print JMeq.
-
-Lemma id_is_unique_2 :
-  forall (A B : Type) (f : A -> A) (g : B -> B),
-  f ~= g.
-Proof.
-  intros A B f g.
-  rewrite (id_is_unique A f).
-  rewrite (id_is_unique B g).
-Admitted.
-
-Lemma subst_id :
-  forall (A B : Type) (body : (A -> A) -> B),
-  (fun f : A -> A => body f) = const (body id).
-Proof.
-  intros A B body.
-  extensionality f.
-  now rewrite (@id_is_unique A f).
-Qed.
-
-Lemma eta_expand :
-  forall (A B : Type) (body : A -> B),
-  body = (fun arg : A => body arg).
-Proof. trivial. Qed.
-
-(* Lemma left_id_is_id {A : Type} : *)
-(*   forall (f : A -> A) (x : (A -> A) + A), *)
-(*   x = inl (B := A) f -> either (fun y => f y) id = id. *)
-
-
-(* -- P3 (does not generally hold): select (pure (Right x)) y = pure x *)
-(* p3 :: Selective f => b -> f (a -> b) -> f b *)
-(* p3 x y = select (pure (Right x)) y === pure x *)
-(* Theorem Select_pure_right {F : Type -> Type} : *)
-(*   forall (A B : Type) (x : B) (y : Select F (A -> B)), *)
-(*     select (pure (Right x)) y = Pure x. *)
-(* Admitted. *)
-
-Print arrow.
-
-Program Instance Coq_Function_Functor (Domain : Type) : Functor (arrow Domain) := {
-  fmap x y f g := f \o g
-}.
-
-Check (fmap[ arrow nat]).
-Compute ((fmap (fun x => S x) (const (S 0))) 0).
+(* Free theorems have to be declared as axioms *)
 
 (* -- F1 (Free): f <$> select x y = select (fmap f <$> x) (fmap f <$> y) *)
 (* f1 :: Selective f => (b -> c) -> f (Either a b) -> f (a -> b) -> f c *)
