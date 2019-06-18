@@ -255,13 +255,136 @@ Definition law3_g {A B C : Type}
 Definition law3_h  {A B C : Type}
            (z : A -> B -> C) : A * B -> C := uncurry z.
 
-Theorem Select_Selective_law3_assoc
-  {A B C : Type} {F : Type -> Type}
+Require Import Coq.Program.Equality.
+Require Import Coq.Bool.Bool.
+
+Lemma Select_law3_case_x_pure_left:
+  forall (A B C : Type) (F : Type -> Type) (x : B)
+    (y : Select F (A + (B -> C))) (z : Select F (A -> B -> C)),
+    Pure (Left x) <*? (y <*? z) =
+    (law3_f <$> (Pure (Left x))) <*? (law3_g <$> y) <*? (law3_h <$> z).
+Proof.
+  intros A B C F x y z.
+  rewrite Select_pure_left.
+  remember (fmap[ Select F] law3_f (Pure (inl x))) as p.
+  simpl fmap in Heqp. simp Select_map in Heqp.
+  rewrite Heqp. clear Heqp p.
+  rewrite Select_pure_left.
+  rewrite fmap_comp_x.
+  rewrite Select_free_1.
+  rewrite Select_free_3.
+  remember (fmap[ Select F] (fun y0 : A + (B -> C) => rev_f_ap x (law3_g y0)) y <*? fmap[ Select F] law3_h z) as rhs.
+  rewrite Select_free_3 in Heqrhs.
+  rewrite Heqrhs. clear Heqrhs rhs.
+  (* Now we can drop the subterm `<*? fmap[ Select F] rev_f_ap z`. *)
+  f_equal.
+  rewrite fmap_comp_x.
+  rewrite fmap_comp_x.
+  (* Drop the outher fmap *) 
+  f_equal.
+  extensionality y0. destruct y0; trivial.
+Qed.
+
+Lemma Select_law3_case_x_pure_right:
+  forall (A B C : Type) (F : Type -> Type) (x : C)
+    (y : Select F (A + (B -> C))) (z : Select F (A -> B -> C)),
+    Pure (Right x) <*? (y <*? z) =
+    (law3_f <$> (Pure (Right x))) <*? (law3_g <$> y) <*? (law3_h <$> z).
+Proof.
+  intros A B C F x y z.
+  remember (fmap[ Select F] law3_f (Pure (inr x))) as p.
+  simpl fmap in Heqp. simp Select_map in Heqp.
+  unfold law3_f in Heqp. simpl fmap in Heqp.
+  rewrite Heqp. clear Heqp p.
+  remember (Pure (inr (inr x)) <*? fmap[ Select F] law3_g y <*? fmap[ Select F] law3_h z) as rhs.
+  rewrite Select_free_3 in Heqrhs.
+  rewrite Select_free_1 in Heqrhs.
+  rewrite fmap_comp_x in Heqrhs.
+  remember (fmap[ Select F] (fmap[ sum B] (mapLeft (flip law3_h))) (Pure (inr (inr x)))) as p.
+  simpl fmap in Heqp. simp Select_map in Heqp. simpl Either_map in Heqp.
+  rewrite Heqp in Heqrhs. clear Heqp p.
+  remember (Pure (inr (inr x)) <*? fmap[ Select F] (fun y : A + (B -> C) => mapLeft (flip law3_h) \o law3_g y) y) as p.
+  rewrite Select_free_3 in Heqp.
+  rewrite Heqp in Heqrhs. clear Heqp p.
+  remember (fmap[ Select F] (mapLeft (flip (fun y : A + (B -> C) => mapLeft (flip law3_h) \o law3_g y)))
+                (Pure (inr (inr x)))) as p.
+  simpl fmap in Heqp. simp Select_map in Heqp. simpl mapLeft in Heqp.
+  rewrite Heqp in Heqrhs. clear Heqp p.
+  remember ( Pure (inr (inr x)) <*? fmap[ Select F] law3_g y) as p.
+  rewrite Select_free_3 in Heqp.
+  remember (fmap[ Select F] (mapLeft (flip law3_g)) (Pure (inr (inr x)))) as q.
+  simpl fmap in Heqq. simp Select_map in Heqq. simpl mapLeft in Heqq.  
+  rewrite Heqrhs. clear Heqrhs rhs Heqp p Heqq q.
+  dependent induction z.
+  - remember (fmap[ Select F] rev_f_ap (Pure a)) as q.
+    simpl fmap in Heqq. simp Select_map in Heqq. rewrite Heqq. clear Heqq q.
+    remember (Pure (inr (inr x)) <*? fmap[ Select F] rev_f_ap y <*? Pure (rev_f_ap a)) as rhs.
+    remember (Pure (inr (inr x)) <*? fmap[ Select F] rev_f_ap y) as p.
+    rewrite Select_Selective_law1 in Heqrhs.
+    rewrite Heqp in Heqrhs. clear Heqp p.
+    rewrite Heqrhs. clear Heqrhs rhs.
+    remember (y <*? Pure a) as p.
+    simpl "<*?" in Heqp. unfold Select_select in Heqp. simp Select_selectBy in Heqp.
+    rewrite Heqp. clear Heqp p.
+    remember (fmap[ Select F] (either (rev_f_ap a) id) (Pure (inr (inr x)) <*? fmap[ Select F] rev_f_ap y)) as p.
+    rewrite Select_free_1 in Heqp.
+    rewrite fmap_comp_x in Heqp.
+    rewrite Heqp. clear Heqp p.
+    remember (fmap[ Select F] (fmap[ sum (A + (B -> C) -> ((A -> B -> C) -> C) + C)] (either (rev_f_ap a) id))
+                  (Pure (inr (inr x)))) as p.
+    simpl fmap in Heqp. simp Select_map in Heqp. simpl Either_map in Heqp. unfold id in Heqp.
+    rewrite Heqp. clear Heqp p.
+    remember (Pure (inr x) <*? fmap[ Select F] (either (rev_f_ap a) id \o mapLeft rev_f_ap) y) as lhs.
+    remember (Pure (inr x) <*? fmap[ Select F] (fun y0 : A + (B -> C) => either (rev_f_ap a) id \o rev_f_ap y0) y) as rhs.
+    rewrite Select_free_3 in Heqlhs.
+    rewrite Select_free_3 in Heqrhs.
+    simpl fmap in Heqlhs. simp Select_map in Heqlhs. simpl mapLeft in Heqlhs.
+    simpl fmap in Heqrhs. simp Select_map in Heqrhs. simpl mapLeft in Heqrhs.
+    rewrite Heqlhs. rewrite Heqrhs. reflexivity.
+  - (* transform lhs by evaluating select two times *)
+    remember (y <*? MkSelect z f) as p.
+    simpl "<*?" in Heqp. unfold Select_select in Heqp.
+    simp Select_selectBy in Heqp.
+    rewrite Heqp. clear Heqp p.
+    remember (Pure (inr x) <*? MkSelect (Select_selectBy (g (mapLeft rev_f_ap)) y z) f) as p.
+    simpl "<*?" in Heqp. unfold Select_select in Heqp.
+    simp Select_selectBy in Heqp.
+    rewrite Heqp. clear Heqp p.
+    (* now tranform rhs... *)
+    remember (Pure (inr (inr x)) <*? fmap[ Select F] rev_f_ap y <*? fmap[ Select F] rev_f_ap (MkSelect z f)) as p.
+    remember ( Pure (inr (inr x)) <*? fmap[ Select F] rev_f_ap y) as q.
+    simpl "<*?" in Heqp. unfold Select_select in Heqp.
+    simp Select_map in Heqp.
+    simp Select_selectBy in Heqp.
+    rewrite Heqq in Heqp. clear Heqq q.
+    rewrite Heqp. clear Heqp p.
+    f_equal.
+    rewrite Select_map_to_fmap.
+    assert (g (mapLeft rev_f_ap) = mapLeft rev_f_ap).
+    rewrite IHz.
+    remember ((fmap[ Select F] (Either_bimap (fun k : X -> A -> B -> C => rev_f_ap \o k) rev_f_ap) z)) as p.
+    unfold comp in Heqp. unfold rev_f_ap in Heqp.
+
+
+Admitted.
+
+Theorem Select_Selective_law3_assoc :
+  forall (A B C : Type) (F : Type -> Type)
   (x : Select F (B + C))
   (y : Select F (A + (B -> C)))
-  (z : Select F (A -> B -> C)) :
+  (z : Select F (A -> B -> C)),
   x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z).
 Proof.
+  (* dependent induction y. *)
+  (* -  *)
+
+  (* dependent induction z. *)
+  (* - remember (y <*? Pure a) as p. *)
+  (*   simpl "<*?" in Heqp. *)
+  (*   unfold Select_select in Heqp. *)
+  (*   rewrite Select_selectBy_equation_1 in Heqp. *)
+  (*   rewrite Heqp. clear Heqp p. *)
+  (*   remember (fmap[ Select F] law3_g y <*? fmap[ Select F] law3_h (Pure a)) as p. *)
 Admitted.
 
 (* This is a proof of the (Pure Right) case of the distributivity theorem for rigid
