@@ -5,9 +5,27 @@ Require Import Data.Either.
 Require Import Control.Applicative.
 Require Import Control.Selective.
 Require Import FunctionalExtensionality.
+Require Import Coq.Setoids.Setoid.
+Require Import Coq.Classes.Morphisms.
+Require Import Classes.Morphisms_Prop.
 Require Import Omega.
+Require Import FunInd.
+Require Import  Recdef.
 
 Generalizable All Variables.
+
+(* Functors preserve extensional equality for the applied function.
+   This is needed to perform setoid rewriting within the function
+   passed to a functor. *)
+Add Parametric Morphism {A B} `{Functor F} : (@fmap F _ A B)
+  with signature (pointwise_relation _ eq ==> eq ==> eq)
+    as mul_isomorphism.
+Proof.
+  intros.
+  f_equal.
+  extensionality e.
+  apply H0.
+Qed.
 
 Inductive Select (F : Type -> Type) (A : Type) :=
     Pure   : A -> Select F A
@@ -113,8 +131,6 @@ Hint Constructors Acc.
 (* Theorem Select_depth_order_wf : forall (A B : Type) (F : Type -> Type), well_founded (@Select_depth_order A F). *)
 (* Admitted. *)
 
-Require Import FunInd.
-Require Import  Recdef.
 
 (* Function Select_select {A B : Type} `{H : Functor F} *)
 (*          (x : Select F (A + B)) (handler : (Type * Select F (A -> B))) *)
@@ -148,6 +164,8 @@ Proof.
   simpl Select_depth. omega.
 Qed.
 
+Functional Scheme Select_select_help_ind := Induction for Select_select_help Sort Prop.
+
 Definition Select_select  {A B : Type} `{H : Functor F}
            (x : Select F (A + B)) (handler : Select F (A -> B)) :
   Select F B :=
@@ -165,7 +183,7 @@ Qed.
 Lemma Select_select_equation_2 : forall (A B C : Type) `(H : Functor F)
          (x : Select F (A + B)) (y : Select F (C + (A -> B))) (z : F (C -> A -> B)),
     Select_select x (MkSelect y z) =
-     MkSelect (Select_select (Select_map law3_f x) (Select_map law3_g y)) (law3_h <$> z).
+     MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z).
 Proof.
   intros A B C F H x y z.
   unfold Select_select.
@@ -224,6 +242,11 @@ Theorem Select_free_2 `{Functor F} :
     select (mapLeft f <$> x) y = select x ((fun g : C -> B => g \o f) <$> y).
 Admitted.
 
+Theorem Select_free_2_mkSelet `{Functor F} :
+  forall (A B C : Type) (f : A -> C) (x : Select F (A + B)) (y : F (C -> B)),
+    MkSelect (mapLeft f <$> x) y = MkSelect x ((fun g : C -> B => g \o f) <$> y).
+Admitted.
+
 (* -- F3 (Free): select x (f <$> y) = select (first (flip f) <$> x) (flip ($) <$> y) *)
 (* f3 :: Selective f => (c -> a -> b) -> f (Either a b) -> f c -> f b *)
 (* f3 f x y = select x (f <$> y) === select (first (flip f) <$> x) (flip ($) <$> y) *)
@@ -232,6 +255,14 @@ Theorem Select_free_3 `{Functor F} :
                         (x : Select F (A + B))
                         (y : Select F C),
     select x (f <$> y) = select (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
+Admitted.
+
+Theorem Select_free_3_mkSelet `{Functor F} :
+  forall (A B C : Type) (f : C -> A -> B)
+                   (x : Select F (A + B))
+                   (y : F C),
+    MkSelect x (f <$> y) = MkSelect (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
+Proof.
 Admitted.
 
 Lemma Select_select_to_infix :
@@ -248,11 +279,147 @@ Proof. reflexivity. Qed.
 
 Require Import Coq.Program.Equality.
 
-Theorem select_selective_law3_assoc
-  {A B C : Type} {F : Type -> Type} `{FunctorLaws F}
+Functional Scheme select_help_ind := Induction for Select_select_help Sort Prop.
+
+Check select_help_ind.
+
+Lemma Either_mapLeft_comp :
+  forall (A B C D : Type)
+    (x : (A + B))
+    (g : (A -> C))
+    (f : (C -> D)),
+    mapLeft f (mapLeft g x) = mapLeft (f \o g) x.
+Proof.
+  intros A B C D x f.
+  destruct x; trivial.
+Qed.
+
+Lemma Either_mapLeft_right :
+  forall (A B C : Type)
+    (x : (A + B))
+    (f : (A -> C)),
+    mapLeft f (Either_map (@Right A B) x) = Either_map Right (mapLeft f x).
+Proof.
+  intros A B C x f.
+  destruct x; trivial.
+Qed.
+
+(* -- P1id (Identity): select x (pure id) == either id id <$> x *)
+Theorem Select_Selective_law1 `{Functor F} :
+  forall (A B : Type) (x : Select F (A + B)) (y : A -> B),
+    select x (Pure y) = either y id <$> x.
+Proof.
+  intros A B x y.
+  simpl select.
+  rewrite Select_select_equation_1.
+  f_equal.
+  unfold comp.
+  destruct x; trivial.
+Qed.
+
+Print Select_select_help_equation.
+
+Check select.
+Check MkSelect.
+
+Check MkSelect.
+
+(* Lemma select_selective_law3_assoc_ind_step : *)
+(*   forall (A B C : Type) *)
+(*     (x  : Select F (A + B)) *)
+(*     (y : Select F (X -> B)) *)
+(*     (x' : Select F (X + (A + B)) (y' : Select F (A -> B)) *)
+(*   select x y = MkSelect x' y' *)
+
+(* Theorem select_selective_law3_assoc : *)
+(*   forall (A B C : Type) `{FunctorLaws F} *)
+(*   (x : Select F (B + C)) *)
+(*   (y : Select F (A + (B -> C))) *)
+(*   (z : Select F (A -> B -> C)), *)
+(*   x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z). *)
+(*   (* Select_select x (Select_select y z) = *) *)
+(*   (* Select_select (Select_select (Select_map law3_f x) (Select_map law3_g y)) (Select_map law3_h z). *) *)
+(* Proof. *)
+(*   intros A B C F HF HFL x y z. *)
+(*   dependent induction z. *)
+(*   - admit. *)
+(*   - remember (x <*? (y <*? MkSelect z f)) as lhs. *)
+(*     remember (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y <*? fmap[ Select F] law3_h (MkSelect z f)) as rhs. *)
+(*     simpl in *. *)
+(*     rewrite Select_select_equation_2 in Heqlhs. *)
+(*     rewrite Select_select_equation_2 in Heqlhs. *)
+(*     rewrite Select_select_equation_2 in Heqrhs. *)
+(*     repeat rewrite Select_select_to_infix in *. repeat rewrite Select_map_to_fmap in *. *)
+(*     repeat rewrite Either_map_to_fmap in *. *)
+(*     rewrite Heqlhs. rewrite Heqrhs. clear Heqlhs lhs Heqrhs rhs. *)
+(*     repeat rewrite fmap_comp_x. *)
+(*     remember (  MkSelect *)
+(*     (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) *)
+(*     (fmap[ F] (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0)) f)) as lhs. *)
+(*     remember  (MkSelect *)
+(*     (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*? *)
+(*      fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z) *)
+(*     (fmap[ F] (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)) f)) as rhs. *)
+(*     rewrite Select_free_3_mkSelet in Heqlhs. *)
+(*     rewrite Select_free_3_mkSelet in Heqrhs. *)
+(*     rewrite Heqlhs. rewrite Heqrhs. clear Heqlhs lhs Heqrhs rhs. *)
+(*     f_equal. *)
+
+(*     remember (fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) as q1. *)
+(*     remember (fmap[ Select F] (mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)))) *)
+(*     (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*? *)
+(*      fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z)) as rhs. *)
+(*     remember (mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)))) as t. *)
+(*     rewrite Select_free_1 in Heqrhs. *)
+(*     rewrite Heqt in Heqrhs. clear Heqt t. *)
+(*     remember ( fmap[ Select F] *)
+(*              (fun g : A * B -> B0 * (A * B) + C => *)
+(*               mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0))) \o g) *)
+(*              (fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z)) as q2. *)
+
+(*     remember ((mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0))))) as p1. *)
+(*     remember ((mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0))))) as p2. *)
+(*     remember (  fmap[ Select F] p1 *)
+(*                     (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) ) as lhs. *)
+(*     remember ( fmap[ Select F] p2 *)
+(*     (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*? *)
+(*          fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z)) as rhs. *)
+(*     rewrite Select_free_1 in Heqlhs. *)
+(*     rewrite Select_free_1 in Heqrhs. *)
+(*     rewrite fmap_comp_x in Heqlhs. *)
+(*     rewrite fmap_comp_x in Heqrhs. *)
+(*     rewrite Select_free_1 in Heqrhs. *)
+(*     repeat rewrite fmap_comp_x in Heqrhs. *)
+(*     (* Looks like a sensible goal *) *)
+(*     rewrite Heqlhs. rewrite Heqrhs. clear Heqlhs lhs Heqrhs rhs. *)
+
+(*     remember (fmap[ Select F] (fun y0 : B + C => fmap[ sum B] p1 (law3_f y0)) x) as x1'. *)
+(*     remember (fmap[ Select F] *)
+(*     (fun y0 : B + C => fmap[ sum B] (fun y1 : A * B + C => fmap[ sum (A * B)] p2 (law3_f y1)) (law3_f y0)) x) as x2'. *)
+(*     remember (fmap[ Select F] (fun g : B -> B0 * A * B + C => p1 \o g) *)
+(*     (fmap[ Select F] law3_g (fmap[ Select F] law3_f y) *)
+
+(*     rewrite Heqp1. clear Heqp1 p1. rewrite Heqp2. clear Heqp2 p2. *)
+(*     remember ( mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)))) as t. *)
+(*     setoid_rewrite <- Heqt. *)
+
+(*     remember (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) as p. *)
+(*     remember (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*? *)
+(*                   fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z) as q. *)
+(*     unfold law3_h in *. *)
+(*     assert (forall A B C (x : A) (y : B) (z : C), pair x (pair y z) = pair (pair x y) z). *)
+
+Definition reassoc_triple {A B C : Type}
+    (p : (A * (B * C))) : (A * B * C) :=
+  match p with
+  | pair x (pair y z) => pair (pair x y) z
+  end.    
+
+Theorem select_selective_law3_assoc :
+  forall (A B C : Type) `{FunctorLaws F}
   (x : Select F (B + C))
   (y : Select F (A + (B -> C)))
-  (z : Select F (A -> B -> C)) :
+  (z : Select F (A -> B -> C)),
   x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z).
   (* Select_select x (Select_select y z) = *)
   (* Select_select (Select_select (Select_map law3_f x) (Select_map law3_g y)) (Select_map law3_h z). *)
@@ -287,12 +454,36 @@ Proof.
     f_equal.
     + f_equal. f_equal.
       extensionality z. destruct z; trivial.
-    + dependent induction x.
-      * simpl fmap.
+    +
+      revert x y a.
+      (* subst T1. *)
+      (* dependent induction x generalizing A B C y. *)
+      dependent destruction x.
+      * intros x a0.
+        simpl fmap.
         f_equal.
-        destruct a0; now compute.
-      * simpl fmap in *. f_equal.
-        ** admit.
+        destruct a; now compute.
+      * intros y a.
+        simpl fmap in *. f_equal.
+        ** unfold law3_h. unfold law3_f.
+           assert ((fun y0 : B + C => Either_map (either (uncurry a) id) (fmap[ sum B] inr y0)) =
+                   (fun y0 : B + C => fmap (either (uncurry a) id) (fmap[ sum B] inr y0))) as H1.
+           { reflexivity. }
+           rewrite H1. clear H1.
+           assert ((fun y0 : B + C => fmap (either (uncurry a) id) (fmap[ sum B] inr y0)) =
+                   (fun y0 : B + C => fmap (either (uncurry a) id \o inr) y0)) as H1.
+           { now rewrite <- fmap_comp. }
+           rewrite H1. clear H1.
+           assert ((fun y0 : B + C => fmap (either (uncurry a) id \o inr) y0) =
+                   (fun y0 : B + C => fmap id y0)) as H1.
+           { extensionality y0. destruct y0; now compute. }
+           rewrite H1. clear H1.
+           setoid_rewrite fmap_id.
+           assert ((@Either_map  B0 (B + C) (B + C) id) = id) as H1.
+           { extensionality z. destruct z; trivial. }
+           rewrite H1. clear H1.
+           rewrite Select_map_to_fmap.
+           rewrite fmap_id. now unfold id.
         ** unfold law3_h. unfold law3_f.
            assert ((fun y0 : B + C => Either_map (either (uncurry a) id) (fmap[ sum B] inr y0)) =
                    (fun y0 : B + C => fmap (either (uncurry a) id) (fmap[ sum B] inr y0))) as H1.
@@ -310,8 +501,109 @@ Proof.
            assert ((fun k : B0 -> B + C => id \o k) = id) as H1.
            { extensionality k. trivial. }
            rewrite H1. clear H1.
-           rewrite fmap_id. now unfold id.
-  -
+           rewrite fmap_id. now unfold id. 
+  - remember (x <*? (y <*? MkSelect z f)) as lhs.
+    remember (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y <*? fmap[ Select F] law3_h (MkSelect z f)) as rhs.
+    simpl in *.
+    rewrite Select_select_equation_2 in Heqlhs.
+    rewrite Select_select_equation_2 in Heqlhs.
+    rewrite Select_select_equation_2 in Heqrhs.
+    repeat rewrite Select_select_to_infix in *. repeat rewrite Select_map_to_fmap in *.
+    repeat rewrite Either_map_to_fmap in *.
+    rewrite Heqlhs. rewrite Heqrhs. clear Heqlhs lhs Heqrhs rhs.
+    repeat rewrite fmap_comp_x.
+    remember (MkSelect
+    (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z))
+    (fmap[ F] (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0)) f)) as lhs.
+    remember (MkSelect
+    (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*?
+     fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z)
+    (fmap[ F] (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)) f)) as rhs.
+    rewrite Select_free_3_mkSelet in Heqlhs.
+    rewrite Select_free_3_mkSelet in Heqrhs.
+    remember (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0)) as t.
+    assert (t = fun (y0 : B0 -> A -> B -> C) => (law3_h (law3_h y0)) \o reassoc_triple).
+    { rewrite Heqt. extensionality y0. extensionality p. destruct p. destruct p; trivial. }
+    rewrite H1 in Heqrhs. clear H1 Heqt t.
+    Check ((mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0))))).
+    assert ((flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0))) =
+            ((fun (p : B0 * A * B) (y0 : B0 -> A -> B -> C) => law3_h (law3_h y0) p))) by reflexivity.
+    rewrite H1 in Heqlhs. clear H1.
+    assert ((mapLeft (flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0) \o reassoc_triple))) =
+            (mapLeft (b:=C) (fun (p : B0 * (A * B)) (y0 : B0 -> A -> B -> C) => (law3_h (law3_h y0) \o reassoc_triple) p)))
+      by reflexivity.
+    rewrite H1 in Heqrhs. clear H1.
+    assert ((mapLeft (b := C)
+                   (fun (p : B0 * (A * B)) (y0 : B0 -> A -> B -> C) => (law3_h (law3_h y0) \o reassoc_triple) p)) =
+            (mapLeft (fun (p : B0 * A * B) (y0 : B0 -> A -> B -> C) => law3_h (law3_h y0) p)) \o
+             mapLeft reassoc_triple).
+    { extensionality q. destruct q; trivial. }
+    rewrite H1 in Heqrhs. clear H1.
+    remember ((fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*?
+                 fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z)) as t.
+    rewrite <- fmap_comp in Heqrhs.
+    subst t lhs rhs.
+    remember (mapLeft (fun (p : B0 * A * B) (y0 : B0 -> A -> B -> C) => law3_h (law3_h y0) p)) as func_1.
+    remember (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) as t.
+    unfold law3_g in Heqt.
+    simpl fmap in Heqt.
+    assert (t =
+            (fun (y0 : B0 + (A -> B -> C)) (a : A * B) =>
+          Either_bimap (fun p : B0 => (p, a)) (fun f : A -> B -> C => (law3_h f) a) y0)).
+    { rewrite Heqt. extensionality y0. extensionality a. destruct y0; destruct a; trivial. }
+    rewrite H1. clear H1 Heqt t.
+    remember (fun (y0 : B0 + (A -> B -> C)) (a : A * B) =>
+           Either_bimap (fun p : B0 => (p, a)) (fun f0 : A -> B -> C => law3_h f0 a) y0) as t.
+    remember (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*? fmap[ Select F] t z) as p.
+    rewrite Select_free_3 in Heqp.
+    rewrite fmap_comp_x in Heqp.
+    rewrite Heqt in Heqp. clear Heqt t. unfold flip in Heqp.
+    remember (fun y : A * B + C =>
+            mapLeft
+              (fun (y0 : A * B) (x : B0 + (A -> B -> C)) =>
+               Either_bimap (fun p : B0 => (p, y0)) (fun f0 : A -> B -> C => law3_h f0 y0) x) 
+              (law3_f y)) as t.
+    subst p.
+    assert ((fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) =
+            (fun y0 : B0 + ((A * B) -> C) => law3_g (fmap[ sum B0] law3_h y0))
+    f_equal.
+    rewrite Select_free_2_mkSelet in Heqlhs.
+    rewrite Select_free_2_mkSelet in Heqrhs.
+    remember (fmap[ Select F] law3_f x <*?
+              fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) as p1.
+    remember (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*?
+              fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z) as p2.
+    remember (fmap[ F]
+                (fun g : ((B0 -> A -> B -> C) -> C) -> C =>
+                 g \o flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h y0))) (fmap[ F] rev_f_ap f)) as q1.
+    remember (fmap[ F]
+                (fun g : ((B0 -> A -> B -> C) -> C) -> C =>
+                 g \o flip (fun y0 : B0 -> A -> B -> C => law3_h (law3_h \o y0))) (fmap[ F] rev_f_ap f)) as q2.
 
+Admitted.
+
+Definition reassoc_triple {A B C : Type}
+    (p : (A * (B * C))) : (A * B * C) :=
+  match p with
+  | pair x (pair y z) => pair (pair x y) z
+  end.
+
+Definition reassoc_triple' {A B C : Type}
+    (p : (A * (B * C)) + (A * B * C)) : (A * B * C) :=
+  match p with
+  | inl (pair x (pair y z)) => pair (pair x y) z
+  | inr q                   => q
+  end.
+
+Lemma t : forall (A B C : Type)
+  (x : A) (y : B) (z : C),
+  pair (pair x y) z = reassoc_triple (pair x (pair y z)).
+Proof. trivial. Qed.
+
+    rewrite Heqlhs. rewrite Heqrhs. clear Heqlhs lhs Heqrhs rhs.
+    f_equal.
+    remember (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g (fmap[ Select F] law3_f y <*? fmap[ Select F] law3_g z)) as q1.
+    remember (fmap[ Select F] law3_f (fmap[ Select F] law3_f x <*? fmap[ Select F] law3_g y) <*?
+     fmap[ Select F] (fun y0 : B0 + (A -> B -> C) => law3_g (fmap[ sum B0] law3_h y0)) z) as q2.
 
 
