@@ -95,6 +95,12 @@ Obligation 2.
 extensionality x. now destruct x.
 Defined.
 
+Lemma Either_map_to_fmap :
+  forall (A B C : Type)
+         (f : B -> C),
+    @Either_map A B C f = fmap f.
+Proof. now simpl fmap. Qed.
+
 Instance Either_Applicative {E} : Applicative (Either E) :=
 { is_functor := Either_Functor
 ; pure := @Right E
