@@ -53,4 +53,4 @@ Equations Select_select {A B : Type} `{Functor F}
   : (Select F B) by wf (Select_depth handler) lt :=
 Select_select x (Pure y) := either y id <$> x;
 Select_select x (MkSelect y z) :=
-  MkSelect (Select_select (Select_map law3_f x) (Select_map law3_g y)) (Select_map law3_h z).
+  MkSelect (Select_select (Select_map law3_f x) (Select_map law3_g y)) (fmap law3_h z).
