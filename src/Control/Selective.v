@@ -4,7 +4,6 @@ Require Import Hask.Prelude.
 Require Import Data.Either.
 Require Import Data.Monoid.
 Require Import Hask.Data.Functor.
-Require Import Hask.Data.Functor.Const.
 Require Import Hask.Control.Applicative.
 
 Generalizable All Variables.
@@ -31,11 +30,11 @@ Definition apS `{Selective f} {A B : Type}
 (* selectA x y = (\e f -> either f id e) <$> x <*> y *)
 Definition selectA `{Applicative f} {A B : Type}
            (x : f (Either A B)) (y : f (A -> B)) : f B :=
-  (fun e f => either f id e) <$> x <*> y. 
+  (fun e f => either f id e) <$> x <*> y.
 
 Module SelectiveLaws.
 
-Include ApplicativeLaws. 
+Include ApplicativeLaws.
 
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
@@ -62,4 +61,3 @@ Class SelectiveLaws (F : Type -> Type) `{Selective F} := {
 }.
 
 End SelectiveLaws.
- 

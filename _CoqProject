@@ -2,8 +2,6 @@
 src/Prelude.v
 src/Ltac.v
 src/Data/Functor.v
-src/Data/Functor/Contravariant.v
-src/Data/Functor/Const.v
 src/Control/Applicative.v
 src/Data/Either.v
 src/Data/Monoid.v
@@ -11,4 +9,4 @@ src/Control/Selective.v
 src/Data/Over.v
 src/Data/Under.v
 src/Data/Validation.v
-src/Control/Selective/FreerRigid.v
+src/Control/Selective/Rigid.v

@@ -1,15 +1,16 @@
-COQFLAGS = ""
-
-VFILES = $(wildcard src/*.v)
-VOFILES = $(patsubst %.v,%.vo,$(VFILES))
-
-all: $(VOFILES)
-
-%.vo: %.v Makefile.coq
-	$(MAKE) -f Makefile.coq OPT=$(COQFLAGS)
-
-Makefile.coq: _CoqProject
-	coq_makefile -f _CoqProject -o $@
+all: Makefile.coq
+	+$(MAKE) -f Makefile.coq all
 
 clean: Makefile.coq
-	$(MAKE) -f Makefile.coq clean
+	+$(MAKE) -f Makefile.coq cleanall
+	rm -f Makefile.coq Makefile.coq.conf
+
+Makefile.coq: _CoqProject
+	$(COQBIN)coq_makefile -f _CoqProject -o Makefile.coq
+
+_CoqProject Makefile: ;
+
+%: Makefile.coq
+	+$(MAKE) -f Makefile.coq $@
+
+.PHONY: all clean

@@ -1,6 +1,5 @@
 Require Export Hask.Ltac.
 Require Export Hask.Data.Functor.
-Require Export Hask.Data.Functor.Const.
 Require Import FunctionalExtensionality.
 
 Generalizable All Variables.
