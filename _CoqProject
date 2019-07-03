@@ -1,4 +1,5 @@
 -R src/ Hask
+-arg -impredicative-set
 src/Prelude.v
 src/Ltac.v
 src/Data/Functor.v

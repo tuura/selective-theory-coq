@@ -22,5 +22,5 @@ Definition f_ap {A B : Type}
   (f : A -> B) (x : A) := f x.
 
 (* Reverse function application *)
-Definition rev_f_ap {A B : Type}
+Definition rev_f_ap {A B : Set}
   (x : A) (f : A -> B) := f x.
