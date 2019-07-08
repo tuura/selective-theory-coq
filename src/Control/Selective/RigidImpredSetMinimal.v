@@ -10,34 +10,12 @@ Require Import Coq.Classes.Morphisms.
 Require Import Classes.Morphisms_Prop.
 Require Import Omega.
 Require Import FunInd.
-Require Import  Recdef.
+Require Import Recdef.
 
 Generalizable All Variables.
-
-(* Functors preserve extensional equality for the applied function.
-   This is needed to perform setoid rewriting within the function
-   passed to a functor. *)
-Add Parametric Morphism {A B} `{Functor F} : (@fmap F _ A B)
-  with signature (pointwise_relation _ eq ==> eq ==> eq)
-    as mul_isomorphism.
-Proof.
-  intros.
-  f_equal.
-  extensionality e.
-  apply H0.
-Qed.
-
-Definition void := Empty_set.
-
 Inductive Select (F : Type -> Type) (A : Set) : Set :=
     Pure   : A -> Select F A
   | MkSelect : forall (B : Set), Select F (B + A) -> F (B -> A) -> Select F A.
-
-Check Select_ind.
-
-(* Inductive Select (F : Type -> Type) : Set -> Set := *)
-(*     Pure   : forall (A : Set), A -> Select F A *)
-(*   | MkSelect : forall (A B : Set), Select F (B + A) -> F (B -> A) -> Select F A. *)
 
 Arguments Pure {F} {A}.
 Arguments MkSelect {F} {A} {B}.
@@ -50,157 +28,14 @@ Function Select_map {A B : Set} `{Functor F}
                              (fmap (fun k : _ -> A => f \o k) y)
   end.
 
-Functional Scheme Select_map_ind := Induction for Select_map Sort Prop.
-
-Check Select_ind.
-
-(* Lemma t : forall (A : Type), (void + A)%type = A. *)
-(* Proof. *)
-(*   intros A. *)
-
-Definition void_id  : forall (A : Set), (void + A)%type = A.
-Admitted.
-
-Definition Select_coerce {A : Set} `(x : Select F A) : Select F (void + A).
-Proof.
-  destruct x.
-  - rewrite void_id. exact (Pure a).
-  - pose (t := MkSelect x f).
-    rewrite <- void_id in t.
-    exact t.
-Qed.
-
-Print Select_coerce.
-
-Definition add_void {A : Set} (a : A) : void + A := inr a.
-
-(* Definition Select_ind' *)
-(*      : forall (F : Type -> Type) (P : forall A B : Set, Select F (B + A) -> Prop), *)
-(*        (forall (A : Set) (a : A), P A void (Select_coerce (Pure a))) -> *)
-(*        (forall (A B : Set) (s : Select F (B + A)), P A B s -> *)
-(*           forall f0 : F (B -> A), P A void (Select_coerce (MkSelect s f0))) -> *)
-(*        forall (A : Set) (s : Select F A), P A void (Select_coerce s). *)
-(* Admitted. *)
-
-
-Require Import Coq.Lists.List.
-Open Scope list_scope.
-
-
-Check list_ind.
-
-(* Definition list_ind *)
-(*      : forall (A : Type) (P : list A -> Prop), *)
-(*        P nil -> (forall (a : A) (l : list A), P l -> P (a :: l)) -> forall l : list A, P l. *)
-
-
-(* Definition list_ind *)
-(*      : forall (P : forall A, list A -> Prop), *)
-(*     (forall A, P A nil) -> (forall A (a : A) (l : list A), P A l -> P A (a :: l)) -> *)
-(*     (forall A, forall l : list A, P A l). *)
-(* Admitted. *)
-
-Check Select_ind.
-
-Definition list_ind' : forall (P : forall (A : Type), list A -> Prop),
-    (forall (A : Type), P A nil) ->
-    (forall (A : Type) (a : A) (l : list A), P A l -> P A (a :: l)) ->
-    (forall (A : Type) (l : list A), P A l).
-Proof.
-  intros.
-  induction l.
-  - apply H.
-  - apply H0. apply IHl.
-Qed.
-
-(* Lemma t `{Functor F} : *)
-(*   forall (A B : Set) (a : A) (x : list (A -> B)), *)
-(*     map (rev_f_ap a) x = map (rev_f_ap a) x. *)
-(* Proof. *)
-(*   Check list_ind. *)
-(*   intros A B a x. *)
-(*   induction x with list_ind'. *)
-
-(* (* Definition Select_ind' *) *)
-(* (*      : forall (A : Set) (F : Type -> Type) (P : forall A : Set, Select F A -> Prop), *) *)
-(* (*        (forall (a : A), P A (Pure a)) -> *) *)
-(* (*        (forall (B : Set) (s : Select F (B + A)), P (B + A)%type s -> forall f0 : F (B -> A), P A (MkSelect s f0)) -> *) *)
-(* (*        forall (s : Select F A), P A s. *) *)
-(* (* Admitted. *) *)
-
-Inductive Select' (F : Type -> Type) (A : Set) : Type :=
-    Pure'     : forall (B : Set), (B + A) -> Select' F A
-  | MkSelect' : forall (B : Set), Select' F (B + A) -> F (B -> A) -> Select' F A.
-
-Check Select'_rect.
-
-(* Inductive Select' (F : Type -> Type) (A : Type) : Type := *)
-(*     Pure'   : A -> Select' F A *)
-(*   | MkSelect' : forall (B : Type), Select' F (B + A) -> F (B -> A) -> Select' F A. *)
-
-(* (* Inductive Select (F : Type -> Type) : Set -> Set := *) *)
-(* (*     Pure   : forall (A : Set), A -> Select F A *) *)
-(* (*   | MkSelect : forall (A B : Set), Select F (B + A) -> F (B -> A) -> Select F A. *) *)
-
-(* Arguments Pure' {F} {A}. *)
-(* Arguments MkSelect' {F} {A} {B}. *)
-
-(* Function Select_map' {A B : Type} `{Functor F} *)
-(*          (f : A -> B) (x : Select' F A) : Select' F B := *)
-(*   match x with *)
-(*   | Pure' a => Pure' (f a) *)
-(*   | MkSelect' x y => MkSelect' (Select_map' (Either_map f) x) *)
-(*                                (fmap (fun k : _ -> A => f \o k) y) *)
-(*   end. *)
-
-(* Definition Select_ind' *)
-(*      : forall (A : Set) (F : Type -> Type) (P : forall (B : Set), Select F (B + A) -> Prop), *)
-(*        (forall (a : A), P void (Select_coerce (Pure a))) -> *)
-(*        (forall (B : Set) (s : Select F (B + A)), P B s -> *)
-(*           forall f0 : F (B -> A), P void (Select_coerce (MkSelect s f0))) -> *)
-(*        forall (s : Select F A), P void (Select_coerce s). *)
-(* Admitted. *)
-
 Lemma Select_induction_fail `{Functor F} :
   forall (A B : Set) (a : A) (x : Select F (A -> B)),
     Select_map (fun f => f a) x = Select_map (fun f => f a) x.
 Proof.
-  induction x.
-  intros A B a x.
-  refine (Select_ind F
-    (fun _ x => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x)).
-  induction x with Select_ind'.
-  induction x.
+  trivial. Qed.
 
-(* Lemma t `{Functor F} : *)
-(*   forall (A B : Set) (a : A) (x : Select F (A -> B)), *)
-(*     Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x. *)
-(* Proof. *)
-(*   intros A B a x. *)
-(*   induction x. *)
-(*   induction x with Select_ind'. *)
-(*   refine (Select_ind' (A -> B) F *)
-(*     (fun _ x => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x)). *)
-(*   induction x with Select_ind'. *)
-(* Admitted. *)
-  (* induction x. *)
-  (* functional induction (Select_map (rev_f_ap a) x). *)
-  (*   refine (Select_ind' (A -> B) F *)
-  (*   (fun P (x : Select F P) => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x) *)
-  (*        _ _ _ _). *)
-  (* induction x using Select_ind'. *)
-
-(* Lemma t' `{Functor F} : *)
-(*   forall (A B : Type) (a : A) (x : Select' F (A -> B)), *)
-(*     Select_map' ((fun (a : A) (f : A -> B) => f a) a) x = Select_map' ((fun (a : A) (f : A -> B) => f a) a) x. *)
-(* Proof. *)
-(*   intros A B a x. *)
-(*   induction x. *)
-(*   functional induction (Select_map (rev_f_ap a) x). *)
-(*     refine (Select_ind' (A -> B) F *)
-(*     (fun P (x : Select F P) => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x) *)
-(*          _ _ _ _). *)
-(*   induction x using Select_ind'. *)
+(************* End of the minimal example ********************************************)
+(*************************************************************************************)
 
 Lemma Select_map_equation_1 :
   forall (A B : Set) `(Functor F)
@@ -214,10 +49,6 @@ Lemma Select_map_equation_2 :
     Select_map f (MkSelect x y) = MkSelect (Select_map (Either_map f) x)
                                            (fmap (fun k : _ -> A => f \o k) y).
 Proof. trivial. Qed.
-
-(* Program Instance Select_Functor `{Functor F} : Functor (Select F) := { *)
-(*   fmap := fun _ _ f x => Select_map f x *)
-(* }. *)
 
 Import FunctorLaws.
 
@@ -243,7 +74,19 @@ Theorem Select_Functor_law2 {A B C : Set}
   forall (f : B -> C) (g : A -> B) (x : Select F A),
     ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x.
 Proof.
-Admitted.
+  intros f g x.
+  revert f g.
+  generalize dependent C.
+  generalize dependent B.
+  generalize dependent A.
+  induction x; simpl in *; trivial; intros.
+  f_equal.
+  - rewrite IHx.
+    assert ((Either_map f0 \o Either_map g) = (Either_map (E := B) (f0 \o g))) as Hstep.
+    { extensionality z. destruct z; trivial. }
+    rewrite Hstep. clear Hstep. reflexivity.
+  - rewrite fmap_comp_x. f_equal.
+Qed.
 
 Theorem Select_map_comp_x {A B C : Set}
         `{Functor F} `{FunctorLaws F} :
