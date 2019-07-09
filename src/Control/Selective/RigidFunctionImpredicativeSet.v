@@ -61,33 +61,91 @@ Check Select_ind.
 Definition void_id  : forall (A : Set), (void + A)%type = A.
 Admitted.
 
-Definition Select_coerce {A : Set} `(x : Select F A) : Select F (void + A).
+Definition Select_add_void {A : Set} `(x : Select F A) : Select F (void + A).
 Proof.
   destruct x.
   - rewrite void_id. exact (Pure a).
   - pose (t := MkSelect x f).
     rewrite <- void_id in t.
     exact t.
-Qed.
+Defined.
 
-Print Select_coerce.
+Definition Select_drop_void {A : Set} `(x : Select F (void + A)) : Select F A.
+Proof.
+  destruct x.
+  - rewrite <- void_id. exact (Pure s).
+  - pose (t := MkSelect x f).
+    rewrite void_id in t.
+    exact t.
+Defined.
 
-Definition add_void {A : Set} (a : A) : void + A := inr a.
+Local Coercion Select_add_void : Sortclass >-> Funclass.
+Local Coercion Select_drop_void : Sortclass >-> Funclass.
+
+Check (Select_add_void (Pure O)). 
+Set Printing Coercions.
+Check (Select_add_void (Pure O)). 
+Check (Select_drop_void (Select_add_void (Pure O))). 
 
 (* Definition Select_ind' *)
-(*      : forall (F : Type -> Type) (P : forall A B : Set, Select F (B + A) -> Prop), *)
-(*        (forall (A : Set) (a : A), P A void (Select_coerce (Pure a))) -> *)
-(*        (forall (A B : Set) (s : Select F (B + A)), P A B s -> *)
-(*           forall f0 : F (B -> A), P A void (Select_coerce (MkSelect s f0))) -> *)
-(*        forall (A : Set) (s : Select F A), P A void (Select_coerce s). *)
+(*      : forall (F : Type -> Type) (A B : Set) (P : forall {X : Set}, Select F (X + (A -> B)) -> Prop), *)
+(*        (forall (a : (A -> B)), P (Select_add_void (Pure a))) -> *)
+(*        (forall (X : Set) (s : Select F (X + (A -> B))), *)
+(*            P s -> forall f0 : F (X -> (A -> B)), P (Select_add_void (MkSelect s f0))) -> *)
+(*        forall (s : Select F (A -> B)), P (Select_add_void s). *)
+(* Proof. *)
 (* Admitted. *)
 
+Check Select_ind.
+(* Definition Select_ind'' *)
+(*      : forall (F : Type -> Type) (X : Set) (P : forall (A : Set) (HA : A = X), Select F A -> Prop), *)
+(*        (forall (a : X), P X eq_refl (Pure a)) -> *)
+(*        (forall (B : Set) (s : Select F (B + X)), *)
+(*            P (B + X)%type _ s -> forall f0 : F (B -> X), P X eq_refl (MkSelect s f0)) -> *)
+(*        forall (s : Select F X), P X eq_refl s. *)
 
-Require Import Coq.Lists.List.
-Open Scope list_scope.
+Definition Select_ind'
+     : forall (F : Type -> Type) (A B : Set) (P : forall (X : Set), Select F (X + (A -> B)) -> Prop),
+       (forall (a : (A -> B)), P void (Select_add_void (Pure a))) ->
+       (forall (X : Set) (s : Select F (X + (A -> B))),
+           P X s -> forall f0 : F (X -> (A -> B)), P void (Select_add_void (MkSelect s f0))) ->
+       forall (s : Select F (A -> B)), P void (Select_add_void s).
+Proof.
+Admitted.
+
+Require Import Coq.Program.Equality.
+
+(* Lemma Select_induction_fail `{Functor F} : *)
+(*   (* forall (A B : Set) (a : A) (x : Select F (void + (A -> B))), *) *)
+(*   (*   Select_map (Either_map (fun f => f a)) x = Select_map (Either_map (fun f => f a)) x. *) *)
+(*   forall (A B : Set) (a : A) (x : Select F ((A -> B))), *)
+(*     Select_map ((fun f => f a)) x = Select_map ((fun f => f a)) x. *)
+(* Proof. *)
+
+(*   intros A B a x. *)
+
+(*   dependent induction x. *)
+(*   - admit. *)
+(*   -  *)
+
+(*   refine (@Select_ind' F A B *)
+(*     (* (fun X (y : Select F (X + (A -> B))) => Select_map (Either_map (fun f  : A -> B => f a)) y = *) *)
+(*     (*             Select_map (Either_map (fun f => f a)) y) _ _  (x)). *) *)
+(*       (fun X (y : Select F (X + (A -> B))) => Select_map (Either_map (fun f  : A -> B => f a)) y = *)
+(*                                               Select_map (Either_map (fun f => f a)) y) *)
+(*            _ _  (Select_drop_void x)). *)
+(*   induction x using Select_ind'. *)
+(*   intros A B a x. *)
+(*   refine (Select_ind F *)
+(*     (fun _ x => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x)). *)
+(*   induction x with Select_ind'. *)
+(*   induction x. *)
+
+(* Require Import Coq.Lists.List. *)
+(* Open Scope list_scope. *)
 
 
-Check list_ind.
+(* Check list_ind. *)
 
 (* Definition list_ind *)
 (*      : forall (A : Type) (P : list A -> Prop), *)
@@ -100,18 +158,18 @@ Check list_ind.
 (*     (forall A, forall l : list A, P A l). *)
 (* Admitted. *)
 
-Check Select_ind.
+(* Check Select_ind. *)
 
-Definition list_ind' : forall (P : forall (A : Type), list A -> Prop),
-    (forall (A : Type), P A nil) ->
-    (forall (A : Type) (a : A) (l : list A), P A l -> P A (a :: l)) ->
-    (forall (A : Type) (l : list A), P A l).
-Proof.
-  intros.
-  induction l.
-  - apply H.
-  - apply H0. apply IHl.
-Qed.
+(* Definition list_ind' : forall (P : forall (A : Type), list A -> Prop), *)
+(*     (forall (A : Type), P A nil) -> *)
+(*     (forall (A : Type) (a : A) (l : list A), P A l -> P A (a :: l)) -> *)
+(*     (forall (A : Type) (l : list A), P A l). *)
+(* Proof. *)
+(*   intros. *)
+(*   induction l. *)
+(*   - apply H. *)
+(*   - apply H0. apply IHl. *)
+(* Qed. *)
 
 (* Lemma t `{Functor F} : *)
 (*   forall (A B : Set) (a : A) (x : list (A -> B)), *)
@@ -161,16 +219,16 @@ Check Select'_rect.
 (*        forall (s : Select F A), P void (Select_coerce s). *)
 (* Admitted. *)
 
-Lemma Select_induction_fail `{Functor F} :
-  forall (A B : Set) (a : A) (x : Select F (A -> B)),
-    Select_map (fun f => f a) x = Select_map (fun f => f a) x.
-Proof.
-  induction x.
-  intros A B a x.
-  refine (Select_ind F
-    (fun _ x => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x)).
-  induction x with Select_ind'.
-  induction x.
+(* Lemma Select_induction_fail `{Functor F} : *)
+(*   forall (A B : Set) (a : A) (x : Select F (A -> B)), *)
+(*     Select_map (fun f => f a) x = Select_map (fun f => f a) x. *)
+(* Proof. *)
+(*   induction x. *)
+(*   intros A B a x. *)
+(*   refine (Select_ind F *)
+(*     (fun _ x => Select_map (rev_f_ap a) x = Select_map (rev_f_ap a) x)). *)
+(*   induction x with Select_ind'. *)
+(*   induction x. *)
 
 (* Lemma t `{Functor F} : *)
 (*   forall (A B : Set) (a : A) (x : Select F (A -> B)), *)
@@ -537,29 +595,104 @@ Proof.
   now simpl.
 Qed.
 
-(* (* u <*> pure y = pure ($ y) <*> u *) *)
-(* Theorem Select_Applicative_law3 *)
-(*         `{Functor F} `{FunctorLaws F} : *)
-(*   forall (A B : Set) (u : Select F (A -> B)), u = u. *)
-(* Proof. *)
-(*   intros A B. *)
-(*   set (T := A -> B). *)
-(*   assert (T = A -> B) by admit. *)
-(*   revert H2. *)
-(*   generalize dependent T. *)
-(*   revert A B. *)
-(*   induction u. *)
-(*   - reflexivity. *)
-(*   - reflexivity. *)
+Theorem Select_Applicative_ap_fmap
+        `{Functor F} `{FunctorLaws F} :
+  forall (A B : Set) (f : A -> B) (x : Select F A), Select_map f x = Select_ap (Pure f) x.
+Proof.
+  intros A B f x.
+  revert f.
+  generalize dependent B.
+  generalize dependent A.
+  induction x; intros.
+  - simpl. now rewrite Select_Applicative_law2.
+  - unfold Select_ap. simpl.
+    rewrite Select_select_equation_2.
+    simpl.
+    rewrite Select_map_comp_x.
+    rewrite Select_free_3.
+    remember (Select_select (Select_map (mapLeft (flip (law3_g \o Either_map rev_f_ap))) (Pure (inl f0)))
+       (Select_map rev_f_ap x)) as p.
+    simpl in Heqp.
+    assert (Select_select (Pure (inl (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x) =
+            Select_select (Select_map inl (Pure (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x))
+      as Hstep by reflexivity.
+    rewrite Hstep in Heqp. clear Hstep.
+    remember (flip (law3_g \o Either_map rev_f_ap) f0) as q.
+    Print Select_ap.
+    assert (p = Select_ap (Pure q) x) as Hstep.
+    { rewrite Heqq. rewrite Heqp. unfold Select_ap. rewrite Heqq. reflexivity. }
+    rewrite Hstep. clear Hstep Heqp p.
+    rewrite IHx.
+    subst q.
+    rewrite fmap_comp_x.
+    remember (MkSelect (Select_ap (Pure (Either_map f0)) x) (fmap[ F] (fun k : B -> A => f0 \o k) f)) as lhs.
+    remember (MkSelect (Select_ap (Pure (flip (law3_g \o Either_map rev_f_ap) f0)) x)
+                       (fmap[ F] (fun y : B -> A => law3_h (rev_f_ap \o y)) f) ) as rhs.
+    rewrite Select_free_3_mkSelect in Heqlhs.
+    rewrite Select_free_3_mkSelect in Heqrhs.
+    subst rhs lhs.
+    f_equal.
+    replace (Pure (Either_map f0)) with (Select_map (const (Either_map (E:=B) f0)) (Pure (@id A))) by reflexivity.
+    replace (Pure (flip (law3_g \o Either_map rev_f_ap) f0)) with
+            (Select_map (const (flip (law3_g \o Either_map (E:=B) rev_f_ap) f0)) (Pure (@id A))) by reflexivity.
+    remember (Select_map (mapLeft (flip (fun k : B -> A => f0 \o k)))
+                         (Select_ap (Select_map (const (Either_map f0)) (Pure (@id A))) x)) as lhs.
+    remember (Select_map (mapLeft (flip (fun y : B -> A => law3_h (rev_f_ap \o y))))
+             (Select_ap (Select_map (const (flip (law3_g \o Either_map rev_f_ap) f0)) (Pure (@id A))) x)) as rhs.
+    unfold Select_ap in *.
+    rewrite Select_free_1 in Heqlhs.
+    rewrite Select_free_1 in Heqrhs.
+    repeat rewrite Select_map_comp_x in Heqlhs.
+    repeat rewrite Select_map_comp_x in Heqrhs.
+    rewrite Select_free_3 in Heqlhs.
+    rewrite Select_free_3 in Heqrhs.
+    subst lhs rhs.
+    f_equal.
+    repeat rewrite Select_map_comp_x.
+    compute. do 2 f_equal.
+    extensionality x0; destruct x0; trivial.
+ Qed.
 
-Require Import Coq.Program.Equality.
+Theorem Select_pure_left `{HF : Functor F} {HFL : FunctorLaws F} :
+  forall (A B : Set) (x : A) (y : Select F (A -> B)),
+    Select_select (Pure (Left x)) y = Select_map (rev_f_ap x) y.
+Proof.
+  intros A B x y.
+  (* The idea of the proof is to massage the goal into the form of the definition of Select_ap,
+     fold the definition, substitute it with the applicative <*> and finish the prove using
+     the Applicative laws. *)
 
-(* Definition Select_ap_ind *)
-(*      : forall (F : Type -> Type) (P : forall A B : Set, Select F (A -> B) -> Prop), *)
-(*        (forall (A B : Set) (a : A -> B), P A B (Pure a)) -> *)
-(*        (forall (A B X : Set) (s : Select F (X + (A -> B))), *)
-(*            P unit (X + (A -> B))%type s -> forall f0 : F (X -> (A -> B)), P A B (MkSelect s f0)) -> *)
-(*        forall (A : Set) (s : Select F A), P A s. *)
+  (* First, we use fmap_id to append an id application to the second argument of select *)
+  assert ( Select_select (Pure (inl x)) y =
+           Select_select (Pure (inl x)) (Select_map id y)) as H.
+  { now rewrite Select_Functor_law1. } 
+  rewrite H. clear H.
+  (* Now we use the third Selective Free Theorem to transfer the newly created id to the first argument
+     of select and leave the second fmap'ed by the reverse function application *)
+  rewrite Select_free_3.
+  (* Drag the id inside Pure *)
+  remember (Select_map (mapLeft (flip id)) (Pure (inl x))) as p.
+  compute in Heqp.
+  rewrite Heqp. clear Heqp p.
+  (* Use ap_homo to extract inl (aka Left) from Pure *)
+  assert (Select_select (Pure (inl (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y) =
+          Select_select (Select_ap (Pure inl) (Pure (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y)) as H.
+  { now rewrite Select_Applicative_law2. }
+  rewrite H. clear H.
+  (* Use ap_fmap to rewrite `pure inl <*>` as `inl <$>` *)
+  replace (Select_ap (Pure inl) (Pure (fun x0 : A -> B => x0 x))) with
+          (Select_map (@inl ((A -> B) -> B) B) (Pure (fun x0 : A -> B => x0 x))) by
+      now rewrite <- Select_Applicative_ap_fmap.
+  (* Fold reverse function application *)
+  assert ((fun x0 : A -> B => x0 x) = rev_f_ap x) as H by reflexivity.
+  rewrite H. clear H.
+  (* Unfold <*? to make the goal identical to Select_ap definition *)
+  replace (Select_select (Select_map inl (Pure (rev_f_ap x))) (Select_map rev_f_ap y)) with
+          (Select_ap (Pure (rev_f_ap x)) y) by reflexivity.
+  (* Use the rigidness of the freer selective construction, i.e. the fact that
+     Select_ap == apS == (<*>) *)
+  now rewrite Select_Applicative_ap_fmap.
+Qed.
 
 (* u <*> pure y = pure ($ y) <*> u *)
 Theorem Select_Applicative_law3
@@ -567,37 +700,122 @@ Theorem Select_Applicative_law3
   forall (A B : Set) (u : Select F (A -> B)) (y : A), Select_ap u (Pure y) = Select_ap (Pure ((fun f => f y))) u.
 Proof.
   intros A B u y.
-  set (T := A -> B).
-  assert (T = A -> B) by admit.
-  Check Select_ind.
-  Search Select.
+  destruct u.
+  - unfold Select_ap. simpl.
+    now repeat rewrite Select_select_equation_1.
+  - unfold Select_ap. simpl.
+    rewrite Select_select_equation_1.
+    rewrite Select_select_equation_2.
+    simpl.
+    repeat rewrite Select_map_comp_x.
+    remember ((Either_map (either (rev_f_ap y) id) \o Either_map inl)) as p.
+    assert (p = Either_map ((rev_f_ap y))) as Hstep.
+    { rewrite Heqp. extensionality z. destruct z; trivial. }
+    rewrite Hstep. clear Hstep Heqp p.
+    repeat rewrite fmap_comp_x.
+    remember ((fun y0 : B0 -> A -> B => either (rev_f_ap y) id \o (inl \o y0))) as p.
+    remember ((fun y0 : B0 -> A -> B => law3_h (rev_f_ap \o y0))) as q.
+    remember ( MkSelect (Select_map (Either_map (rev_f_ap y)) u) (fmap[ F] p f)) as lhs.
+    rewrite Select_free_3_mkSelect in Heqlhs.
+    subst lhs.
+    remember (MkSelect (Select_select (Pure (inl (fun f0 : A -> B => f0 y))) (Select_map (law3_g \o Either_map rev_f_ap) u)) (fmap[ F] q f)) as rhs.
+    rewrite Select_free_3_mkSelect in Heqrhs.
+    rewrite Select_free_1 in Heqrhs.
+    subst rhs.
+    f_equal.
+    simpl.
+    repeat rewrite Select_map_comp_x.
+    (* select (pure (Left  x)) y = ($x) <$> y *)
+    rewrite Select_pure_left.
+    rewrite Select_map_comp_x.
+    f_equal.
+    rewrite Heqp. clear Heqp p. rewrite Heqq. clear Heqq q.
+    compute. extensionality x. destruct x; trivial.
+Qed.
 
-  Check Select_rec.
-  
-  induct u.
-  - admit.
-  - 
-  refine (Select_ind F
-    (fun P (x : Select F P) => Select_ap x (Pure y) = Select_ap (Pure ((fun f => f y))) x)
-         _ _ _ _).
-  - intros A0 z. unfold Select_ap. simpl. rewrite Select_select_equation_1.
-  - intros A0 B0 x IHx z.
-    apply IHx.
-  - exact u.
-  
-  induction u.
-  - admit.
-  - 
-                        
+Theorem Select_Applicative_law4
+        `{Functor F} `{FunctorLaws F} :
+  forall (A B C : Set) (v : Select F (A -> B)) (u : Select F (B -> C))
+    (w : Select F A),
+  (* pure (fun (f : b -> c) (g : a -> b) (x : a) => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w) *)
+  Select_ap (Select_ap (Select_ap (Pure (fun (f : B -> C) (g : A -> B) (x : A) => f (g x))) u) v) w =
+  Select_ap u (Select_ap v w).
+Proof.
+  intros A B C v u w.
+  generalize dependent C.
+  generalize dependent B.
+  generalize dependent A.
+  induction w; intros.
+  - rewrite Select_Applicative_law3.
+    rewrite Select_Applicative_law3.
+    unfold Select_ap. simpl.
+    repeat rewrite Select_pure_left. repeat rewrite Select_map_comp_x.
+    rewrite Select_free_1. repeat rewrite Select_map_comp_x.
+    remember (Either_map (rev_f_ap (fun f : A -> C => f a) \o rev_f_ap) \o
+        ((inl \o rev_f_ap (fun (f : B -> C) (g : A -> B) (x : A) => f (g x))) \o rev_f_ap)) as p.
+    remember ((fun g : ((A -> B) -> A -> C) -> A -> C => (rev_f_ap (fun f : A -> C => f a) \o rev_f_ap) \o g) \o rev_f_ap) as q.
+    remember ((rev_f_ap \o rev_f_ap (fun f : A -> B => f a)) \o rev_f_ap) as r.
+    remember (Select_select (Select_map p u) (Select_map q v)) as lhs.
+    remember (Select_select (Select_map inl u) (Select_map r v)) as rhs.
+    rewrite Select_free_3 in Heqlhs.
+    rewrite Select_free_3 in Heqrhs.
+    subst lhs rhs.
+    f_equal.
+    repeat rewrite Select_map_comp_x.
+    subst p q r.
+    f_equal.
+  - unfold Select_ap. simpl.
+    repeat rewrite Select_select_equation_2.
+    simpl. repeat rewrite Select_select_equation_2.
+    repeat rewrite Select_map_comp_x.
+    repeat rewrite fmap_comp_x.
 
-  remember (Pure (F := F) (fun f : A -> B => f y)) as z.
-  generalize z.
-  set (T := A -> B).
-  remember (A -> B) as T in Heqz.
-
-Import ApplicativeLaws.
-
-Require Import Coq.Program.Equality.
+    rewrite Select_pure_left.
+    repeat rewrite Select_map_comp_x.
+    remember ( MkSelect
+    (Select_select
+       (Select_map (law3_f \o inl)
+          (Select_select
+             (Select_map ((inl \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
+             (Select_map rev_f_ap v))) (Select_map (law3_g \o Either_map rev_f_ap) w))
+    (fmap[ F] (fun y : B -> A => law3_h (rev_f_ap \o y)) f)) as lhs.
+    remember (MkSelect
+    (Select_select (Select_map (law3_f \o inl) u)
+       (Select_map (law3_g \o Either_map rev_f_ap)
+          (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w))))
+    (fmap[ F] (fun y : B -> A => law3_h (rev_f_ap \o law3_h (rev_f_ap \o y))) f)) as rhs.
+    rewrite Select_free_3_mkSelect in Heqlhs.
+    rewrite Select_free_3_mkSelect in Heqrhs.
+    subst lhs rhs.
+    f_equal.
+    remember (Select_map (law3_f \o inl)
+          (Select_select
+             (Select_map ((inl \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
+             (Select_map rev_f_ap v))) as p1.
+    remember (Select_map (law3_g \o Either_map rev_f_ap) w) as q1.
+    remember (Select_map (law3_f \o inl) u) as p2.
+    remember (Select_map (law3_g \o Either_map rev_f_ap)
+          (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w))) as q2.
+    do 2 rewrite Select_free_1.
+    subst p1 q1 p2 q2.
+    repeat rewrite Select_map_comp_x.
+    unfold flip.
+    remember (Either_map (mapLeft (fun (y : B * (A -> C)) (x : B -> A) => law3_h (rev_f_ap \o x) y)) \o
+                         (law3_f \o inl)) as p.
+    remember (Either_map
+          (mapLeft
+             (fun (y : B * (A -> B0) * (B0 -> C)) (x : B -> A) => law3_h (rev_f_ap \o law3_h (rev_f_ap \o x)) y)) \o
+        (law3_f \o inl)) as q.
+    remember ((fun g : (B0 -> C) -> B * (A -> B0) * (B0 -> C) + C =>
+         mapLeft (fun (y : B * (A -> B0) * (B0 -> C)) (x : B -> A) => law3_h (rev_f_ap \o law3_h (rev_f_ap \o x)) y) \o
+         g) \o (law3_g \o Either_map rev_f_ap)) as r.
+    remember (Select_select (Select_map q u)
+    (Select_map r (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w)))) as rhs.
+    rewrite Select_free_1 in Heqrhs.
+    subst rhs.
+    repeat rewrite Select_map_comp_x.
+    (* Looks like this proof boils down to the Selective associativity law *)
+Admitted.
 
 Lemma Either_mapLeft_comp :
   forall (A B C D : Set)
