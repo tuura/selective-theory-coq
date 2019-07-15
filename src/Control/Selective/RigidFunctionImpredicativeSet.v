@@ -560,7 +560,7 @@ induction x.
 - simpl. rewrite Select_select_equation_2.
   repeat rewrite fmap_comp_x.
   repeat rewrite Select_map_comp_x.
-  remember (Select_map law3_f (Pure (inl id))) as p.
+  remember (Select_map law3_f (Pure (Left (@id A)))) as p.
   simpl in Heqp.
   subst p.  
   rewrite Select_free_3_mkSelect.
@@ -574,11 +574,11 @@ induction x.
   f_equal.
 
   remember ((mapLeft (flip (fun y : B -> A => law3_h (rev_f_ap \o y))))) as f1.
-  remember (mapLeft (flip id)) as f2.
+  remember (mapLeft (flip (@id (B -> A)))) as f2.
 
   (*...*)
   rewrite Select_free_1.
-  remember (Select_map (Either_map f1) (Pure (inl id))) as q.
+  remember (Select_map (Either_map f1) (Pure (Left (@id A)))) as q.
   simpl in Heqq.
   subst q.
   (* subst p. *)
@@ -608,7 +608,7 @@ induction x.
   rewrite Hstep in Heqp. clear Hstep.
   (*...*)
   rewrite Select_free_3.
-  remember (Select_map (mapLeft (flip p)) (Pure (inl id))) as q.
+  remember (Select_map (mapLeft (flip p)) (Pure (Left (@id A)))) as q.
   subst p.
   simpl in Heqq.
   unfold flip in Heqq.
@@ -618,16 +618,16 @@ induction x.
   compute in Heqq.
   subst q.
   assert ((fun x0 : B + A => match x0 with
-                                  | inl a => inl (fun x1 : B -> A => x1 a)
-                                  | inr x1 => inr x1
+                                  | Left a => Left (fun x1 : B -> A => x1 a)
+                                  | Right x1 => Right x1
                                   end) =
           (mapLeft rev_f_ap) \o id) as Hstep by reflexivity.
   rewrite Hstep. clear Hstep. clear Heqf1 f1.
-  remember (Pure (inl (mapLeft rev_f_ap \o id))) as p.
+  remember (Pure (Left (mapLeft rev_f_ap \o id))) as p.
   (* assert (p = *)
-  (*         Pure (mapLeft (comp (mapLeft rev_f_ap)) (inl id))) as Hstep by trivial. *)
+  (*         Pure (mapLeft (comp (mapLeft rev_f_ap)) (Left id))) as Hstep by trivial. *)
   assert (p =
-          Select_map (mapLeft (comp (mapLeft rev_f_ap))) (Pure (inl id))) as Hstep by trivial.
+          Select_map (mapLeft (comp (mapLeft rev_f_ap))) (Pure (Left (@id (B + A)%type)))) as Hstep by trivial.
   clear Heqp. rewrite Hstep. clear Hstep p.
   (*...*)
   replace (id x) with x in IHx by reflexivity.
@@ -635,10 +635,10 @@ induction x.
   rewrite Select_free_1.
   rewrite Heqf2.
   repeat rewrite Select_map_comp_x.
-  remember (Either_map (mapLeft (flip id)) \o inl) as q.
+  remember (Either_map (mapLeft (flip (@id (B -> A)%type))) \o Left) as q.
 
   remember (Select_select (Select_map q (Pure (@id (B+A)%type)))
-    (Select_map ((fun g : (B + A -> B + A) -> B + A => mapLeft (flip id) \o g) \o rev_f_ap) x)) as rhs.
+    (Select_map ((fun g : (B + A -> B + A) -> B + A => mapLeft (flip (@id (B -> A))) \o g) \o rev_f_ap) x)) as rhs.
   rewrite Select_free_3 in Heqrhs.
   subst rhs. subst q.
   f_equal.
@@ -671,11 +671,11 @@ Proof.
     simpl.
     rewrite Select_map_comp_x.
     rewrite Select_free_3.
-    remember (Select_select (Select_map (mapLeft (flip (law3_g \o Either_map rev_f_ap))) (Pure (inl f0)))
+    remember (Select_select (Select_map (mapLeft (flip (law3_g \o Either_map rev_f_ap))) (Pure (Left f0)))
        (Select_map rev_f_ap x)) as p.
     simpl in Heqp.
-    assert (Select_select (Pure (inl (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x) =
-            Select_select (Select_map inl (Pure (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x))
+    assert (Select_select (Pure (Left (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x) =
+            Select_select (Select_map Left (Pure (flip (law3_g \o Either_map rev_f_ap) f0))) (Select_map rev_f_ap x))
       as Hstep by reflexivity.
     rewrite Hstep in Heqp. clear Hstep.
     remember (flip (law3_g \o Either_map rev_f_ap) f0) as q.
@@ -724,31 +724,31 @@ Proof.
      the Applicative laws. *)
 
   (* First, we use fmap_id to append an id application to the second argument of select *)
-  assert ( Select_select (Pure (inl x)) y =
-           Select_select (Pure (inl x)) (Select_map id y)) as H.
+  assert ( Select_select (Pure (Left x)) y =
+           Select_select (Pure (Left x)) (Select_map id y)) as H.
   { now rewrite Select_Functor_law1. } 
   rewrite H. clear H.
   (* Now we use the third Selective Free Theorem to transfer the newly created id to the first argument
      of select and leave the second fmap'ed by the reverse function application *)
   rewrite Select_free_3.
   (* Drag the id inside Pure *)
-  remember (Select_map (mapLeft (flip id)) (Pure (inl x))) as p.
+  remember (Select_map (mapLeft (flip (@id (A -> B)))) (Pure (Left x))) as p.
   compute in Heqp.
   rewrite Heqp. clear Heqp p.
-  (* Use ap_homo to extract inl (aka Left) from Pure *)
-  assert (Select_select (Pure (inl (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y) =
-          Select_select (Select_ap (Pure inl) (Pure (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y)) as H.
+  (* Use ap_homo to extract Left (aka Left) from Pure *)
+  assert (Select_select (Pure (Left (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y) =
+          Select_select (Select_ap (Pure Left) (Pure (fun x0 : A -> B => x0 x))) (Select_map rev_f_ap y)) as H.
   { now rewrite Select_Applicative_law2. }
   rewrite H. clear H.
-  (* Use ap_fmap to rewrite `pure inl <*>` as `inl <$>` *)
-  replace (Select_ap (Pure inl) (Pure (fun x0 : A -> B => x0 x))) with
-          (Select_map (@inl ((A -> B) -> B) B) (Pure (fun x0 : A -> B => x0 x))) by
+  (* Use ap_fmap to rewrite `pure Left <*>` as `Left <$>` *)
+  replace (Select_ap (Pure Left) (Pure (fun x0 : A -> B => x0 x))) with
+          (Select_map (@Left ((A -> B) -> B) B) (Pure (fun x0 : A -> B => x0 x))) by
       now rewrite <- Select_Applicative_ap_fmap.
   (* Fold reverse function application *)
   assert ((fun x0 : A -> B => x0 x) = rev_f_ap x) as H by reflexivity.
   rewrite H. clear H.
   (* Unfold <*? to make the goal identical to Select_ap definition *)
-  replace (Select_select (Select_map inl (Pure (rev_f_ap x))) (Select_map rev_f_ap y)) with
+  replace (Select_select (Select_map Left (Pure (rev_f_ap x))) (Select_map rev_f_ap y)) with
           (Select_ap (Pure (rev_f_ap x)) y) by reflexivity.
   (* Use the rigidness of the freer selective construction, i.e. the fact that
      Select_ap == apS == (<*>) *)
@@ -769,17 +769,17 @@ Proof.
     rewrite Select_select_equation_2.
     simpl.
     repeat rewrite Select_map_comp_x.
-    remember ((Either_map (either (rev_f_ap y) id) \o Either_map inl)) as p.
+    remember ((Either_map (either (rev_f_ap y) id) \o Either_map Left)) as p.
     assert (p = Either_map ((rev_f_ap y))) as Hstep.
     { rewrite Heqp. extensionality z. destruct z; trivial. }
     rewrite Hstep. clear Hstep Heqp p.
     repeat rewrite fmap_comp_x.
-    remember ((fun y0 : B0 -> A -> B => either (rev_f_ap y) id \o (inl \o y0))) as p.
+    remember ((fun y0 : B0 -> A -> B => either (rev_f_ap y) id \o (Left \o y0))) as p.
     remember ((fun y0 : B0 -> A -> B => law3_h (rev_f_ap \o y0))) as q.
     remember ( MkSelect (Select_map (Either_map (rev_f_ap y)) u) (fmap[ F] p f)) as lhs.
     rewrite Select_free_3_mkSelect in Heqlhs.
     subst lhs.
-    remember (MkSelect (Select_select (Pure (inl (fun f0 : A -> B => f0 y))) (Select_map (law3_g \o Either_map rev_f_ap) u)) (fmap[ F] q f)) as rhs.
+    remember (MkSelect (Select_select (Pure (Left (fun f0 : A -> B => f0 y))) (Select_map (law3_g \o Either_map rev_f_ap) u)) (fmap[ F] q f)) as rhs.
     rewrite Select_free_3_mkSelect in Heqrhs.
     rewrite Select_free_1 in Heqrhs.
     subst rhs.
@@ -813,11 +813,11 @@ Proof.
     repeat rewrite Select_pure_left. repeat rewrite Select_map_comp_x.
     rewrite Select_free_1. repeat rewrite Select_map_comp_x.
     remember (Either_map (rev_f_ap (fun f : A -> C => f a) \o rev_f_ap) \o
-        ((inl \o rev_f_ap (fun (f : B -> C) (g : A -> B) (x : A) => f (g x))) \o rev_f_ap)) as p.
+        ((Left \o rev_f_ap (fun (f : B -> C) (g : A -> B) (x : A) => f (g x))) \o rev_f_ap)) as p.
     remember ((fun g : ((A -> B) -> A -> C) -> A -> C => (rev_f_ap (fun f : A -> C => f a) \o rev_f_ap) \o g) \o rev_f_ap) as q.
     remember ((rev_f_ap \o rev_f_ap (fun f : A -> B => f a)) \o rev_f_ap) as r.
     remember (Select_select (Select_map p u) (Select_map q v)) as lhs.
-    remember (Select_select (Select_map inl u) (Select_map r v)) as rhs.
+    remember (Select_select (Select_map Left u) (Select_map r v)) as rhs.
     rewrite Select_free_3 in Heqlhs.
     rewrite Select_free_3 in Heqrhs.
     subst lhs rhs.
@@ -835,43 +835,43 @@ Proof.
     repeat rewrite Select_map_comp_x.
     remember ( MkSelect
     (Select_select
-       (Select_map (law3_f \o inl)
+       (Select_map (law3_f \o Left)
           (Select_select
-             (Select_map ((inl \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
+             (Select_map ((Left \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
              (Select_map rev_f_ap v))) (Select_map (law3_g \o Either_map rev_f_ap) w))
     (fmap[ F] (fun y : B -> A => law3_h (rev_f_ap \o y)) f)) as lhs.
     remember (MkSelect
-    (Select_select (Select_map (law3_f \o inl) u)
+    (Select_select (Select_map (law3_f \o Left) u)
        (Select_map (law3_g \o Either_map rev_f_ap)
-          (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w))))
+          (Select_select (Select_map (law3_f \o Left) v) (Select_map (law3_g \o Either_map rev_f_ap) w))))
     (fmap[ F] (fun y : B -> A => law3_h (rev_f_ap \o law3_h (rev_f_ap \o y))) f)) as rhs.
     rewrite Select_free_3_mkSelect in Heqlhs.
     rewrite Select_free_3_mkSelect in Heqrhs.
     subst lhs rhs.
     f_equal.
-    remember (Select_map (law3_f \o inl)
+    remember (Select_map (law3_f \o Left)
           (Select_select
-             (Select_map ((inl \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
+             (Select_map ((Left \o rev_f_ap (fun (f0 : B0 -> C) (g : A -> B0) (x : A) => f0 (g x))) \o rev_f_ap) u)
              (Select_map rev_f_ap v))) as p1.
     remember (Select_map (law3_g \o Either_map rev_f_ap) w) as q1.
-    remember (Select_map (law3_f \o inl) u) as p2.
+    remember (Select_map (law3_f \o Left) u) as p2.
     remember (Select_map (law3_g \o Either_map rev_f_ap)
-          (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w))) as q2.
+          (Select_select (Select_map (law3_f \o Left) v) (Select_map (law3_g \o Either_map rev_f_ap) w))) as q2.
     do 2 rewrite Select_free_1.
     subst p1 q1 p2 q2.
     repeat rewrite Select_map_comp_x.
     unfold flip.
     remember (Either_map (mapLeft (fun (y : B * (A -> C)) (x : B -> A) => law3_h (rev_f_ap \o x) y)) \o
-                         (law3_f \o inl)) as p.
+                         (law3_f \o Left)) as p.
     remember (Either_map
           (mapLeft
              (fun (y : B * (A -> B0) * (B0 -> C)) (x : B -> A) => law3_h (rev_f_ap \o law3_h (rev_f_ap \o x)) y)) \o
-        (law3_f \o inl)) as q.
+        (law3_f \o Left)) as q.
     remember ((fun g : (B0 -> C) -> B * (A -> B0) * (B0 -> C) + C =>
          mapLeft (fun (y : B * (A -> B0) * (B0 -> C)) (x : B -> A) => law3_h (rev_f_ap \o law3_h (rev_f_ap \o x)) y) \o
          g) \o (law3_g \o Either_map rev_f_ap)) as r.
     remember (Select_select (Select_map q u)
-    (Select_map r (Select_select (Select_map (law3_f \o inl) v) (Select_map (law3_g \o Either_map rev_f_ap) w)))) as rhs.
+    (Select_map r (Select_select (Select_map (law3_f \o Left) v) (Select_map (law3_g \o Either_map rev_f_ap) w)))) as rhs.
     rewrite Select_free_1 in Heqrhs.
     subst rhs.
     repeat rewrite Select_map_comp_x.
@@ -1309,7 +1309,7 @@ Definition reassoc_triple {A B C : Type}
 Definition reassoc_triple' {A B C : Type}
     (p : (A * (B * C)) + (A * B * C)) : (A * B * C) :=
   match p with
-  | inl (pair x (pair y z)) => pair (pair x y) z
+  | Left (pair x (pair y z)) => pair (pair x y) z
   | inr q                   => q
   end.
 
