@@ -396,6 +396,67 @@ Definition Select_ap {A B : Set} `{Functor F}
            (f : Select F (A -> B)) (x : Select F A) : Select F B :=
   Select_select (Select_map Left f) (Select_map rev_f_ap x).
 
+Lemma Select_depth_pure `{FunctorLaws F}:
+  forall (A : Set) (x : Select F A),
+    Select_depth x = 0 -> exists a, x = Pure a.
+Proof.
+   destruct x; simpl.
+   - now exists a.
+   - discriminate.
+Qed.
+
+Lemma Select_depth_mkSelect `{FunctorLaws F} :
+  forall (A : Set) (p : Select F A),
+    Select_depth p > 0 -> exists B y z, p = MkSelect (B:=B) y z.
+Proof.
+  intros X p Hp.
+  destruct p.
+  - simpl in Hp. unfold ">" in Hp. inversion Hp.
+  - exists B. exists p. exists f. reflexivity.
+Qed.
+
+Theorem Select_Functor_law1_by_depth_ind {A : Set}
+        `{Functor F} `{FunctorLaws F} :
+  forall (x : Select F A), Select_map id x = id x.
+Proof.
+  unfold id.
+  intros x.
+  remember (Select_depth x) as n.
+  generalize dependent A.
+  revert n.
+  induction n.
+  - intros.
+    symmetry in Heqn.
+    destruct (Select_depth_pure _ _ Heqn).
+    rewrite H2. now simpl.
+  - intros.
+
+     assert (H_d_mkSelect : Select_depth x = S n -> Select_depth x > 0).
+     { omega. }
+     symmetry in Heqn.
+     specialize (H_d_mkSelect Heqn).
+     pose (H_d := Select_depth_mkSelect A x H_d_mkSelect).
+     inversion H_d.
+     inversion H2.
+     inversion H3.
+     rewrite H4 in Heqn.
+     simpl in Heqn.
+     Search (S _ = S _ -> _ = _).
+     assert (Select_depth x1 = n).
+     { apply (Nat.succ_inj _ _ Heqn). }
+     symmetry in H5.
+     (* specialize (IHn A x). *)
+     rewrite H4.
+     simpl.
+     f_equal.
+     + specialize (IHn (x0 + A)%type x1 H5).
+       remember (Select_map (Either_map (fun x3 : A => x3)) x1) as lhs.
+       rewrite <- IHn. subst lhs.
+       f_equal.
+       extensionality z; destruct z; trivial.
+     + now rewrite fmap_id.
+ Qed.
+
 (* Program Instance Select_Applicative *)
 (*         `{Functor F} : Applicative (Select F) := *)
 (*   { is_functor := Select_Functor *)
