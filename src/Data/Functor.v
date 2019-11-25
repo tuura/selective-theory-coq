@@ -3,13 +3,12 @@ Require Import FunctionalExtensionality.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 
+Set Universe Polymorphism.
 Generalizable All Variables.
 
-Class Functor (f : Type -> Type) : Type := {
+Polymorphic Class Functor (f : Type -> Type) : Type := {
   fmap : forall {a b : Type}, (a -> b) -> f a -> f b
 }.
-
-Check fmap.
 
 Arguments fmap {f _ a b} g x.
 

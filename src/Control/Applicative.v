@@ -4,10 +4,11 @@ Require Export Hask.Data.Functor.Const.
 Require Import FunctionalExtensionality.
 
 Generalizable All Variables.
+Set Universe Polymorphism.
 
 Reserved Notation "f <*> g" (at level 28, left associativity).
 
-Class Applicative (f : Type -> Type) := {
+Polymorphic Class Applicative (f : Type -> Type) := {
   is_functor :> Functor f;
 
   pure : forall a : Type, a -> f a;

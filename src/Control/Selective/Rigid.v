@@ -1,4 +1,4 @@
-Require Import Coq.Program.Basics.
+Require Import Hask.Control.Iso.
 Require Import Hask.Prelude.
 Require Import Data.Either.
 Require Import Data.Monoid.
@@ -14,6 +14,7 @@ Require Import FunctionalExtensionality.
 Require Import Omega.
 From Equations Require Import Equations.
 
+Set Universe Polymorphism.
 Generalizable All Variables.
 (* Functors preserve extensional equality for the applied function.
    This is needed to perform setoid rewriting within the function
@@ -65,11 +66,11 @@ Lemma id_x_is_x {A : Type}:
 Proof. intros x. reflexivity. Qed.
 
 Lemma compose_id {A B : Type}:
-  forall (f : A -> B), (compose f id) = f.
+  forall (f : A -> B), (f ∘ id) = f.
 Proof.
   intros f.
   extensionality x.
-  unfold compose.
+  unfold "∘".
   now rewrite id_x_is_x.
 Qed.
 
@@ -91,8 +92,8 @@ Qed.
 Import FunctorLaws.
 
 Lemma fmap_rewrite_compose {A B C : Type} `{Functor F} :
-  forall (f : B -> C) (g : A -> B) (x : F A), 
-    fmap f (fmap g x) = (fmap f \o fmap g) x.
+  forall (f : B -> C) (g : A -> B) (x : F A),
+    fmap f (fmap g x) = (fmap f ∘ fmap g) x.
 Proof.
   intros f g x.
   reflexivity.
@@ -101,7 +102,7 @@ Qed.
 Theorem Select_Functor_law2 {A B C : Type}
         `{Functor F} `{FunctorLaws F} :
   forall (f : B -> C) (g : A -> B) (x : Select F A),
-    Select_map f (Select_map g x) = Select_map (f \o g) x.
+    Select_map f (Select_map g x) = Select_map (f ∘ g) x.
 Proof.
 intros f g x.
 simpl.
@@ -204,39 +205,33 @@ Definition law3_h  {A B C : Type}
 (*   end. *)
 
 Equations Select_select {A B : Type} `{Functor F}
-          (x : Select F (A + B)) (handler : Select F (A -> B)) : Select F B by wf (Select_depth handler) :=
+          (x : Select F (A + B)) (handler : Select F (A -> B)) :
+  Select F B by wf (Select_depth handler) :=
 Select_select x (Pure y) := either y id <$> x;
-Select_select x (MkSelect y z) := MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z).
+Select_select x (MkSelect y z) :=
+  MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z).
 Obligation 1.
 Proof. rewrite Select_fmap_preserves_depth. omega. Qed.
 
-(* Program Fixpoint Select_select {A B : Type} `{Functor F} *)
-(*         (x : Select F (B + A)) (f : Select F (B -> A)) *)
-(*         {measure (Select_depth f)} : Select F A := *)
-(*   match f with *)
-(*   | Pure y => either y id <$> x *)
-(*   | MkSelect y z => MkSelect (Select_select (law3_f <$> x) (law3_g <$> y)) (law3_h <$> z) *)
-(*   end. *)
-(* Obligation 1. *)
-(* Proof. rewrite Select_fmap_preserves_depth. omega. Qed. *)
+(* Definition compose f g := f ∘ g. *)
 
 (* (* ?O(n)? select implementation *) *)
-(* Fixpoint Select_select_go {A B C : Type} `{Functor F} *)
-(*          (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) {struct s} : *)
-(*          Select F B := *)
-(*   match s with *)
-(*   | Pure y => either (k y) id <$> x *)
-(*   | MkSelect y z => *)
-(*     MkSelect (Select_select_go (law3_f <$> x) *)
-(*                                y *)
-(*                                (compose law3_g (mapRight k)) *)
-(*              ) *)
-(*              (compose law3_h (compose k) <$> z) *)
-(*   end. *)
+Fixpoint Select_select_go {A B C : Type} `{Functor F}
+         (x : Select F (A + B)) (s : Select F C) (k : C -> (A -> B)) {struct s} :
+         Select F B :=
+  match s with
+  | Pure y => either (k y) id <$> x
+  | MkSelect y z =>
+    MkSelect (Select_select_go (law3_f <$> x)
+                               y
+                               (comp law3_g (mapRight k))
+             )
+             (comp law3_h (comp k) <$> z)
+  end.
 
-(* Fixpoint Select_select  {A B : Type} `{Functor F} *)
-(*          (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A := *)
-(*   Select_select_go x f id. *)
+Fixpoint Select_select'  {A B : Type} `{Functor F}
+         (x : Select F (B + A)) (f : Select F (B -> A)) : Select F A :=
+  Select_select_go x f id.
 
 Definition Select_ap {A B : Type} `{Functor F}
            (f : Select F (A -> B)) (x : Select F A) : Select F B :=
@@ -264,7 +259,7 @@ Proof.
 Qed.
 
 Theorem P2 {A B : Type} `{FunctorLaws F} :
-  forall (x : A) (y : Select F (A -> B)),  
+  forall (x : A) (y : Select F (A -> B)),
   Select_select (Pure (inl x)) y = y <*> pure x.
   (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
 Proof.
@@ -311,7 +306,7 @@ Proof.
     unfold "\o" in Heqrhs_q.
 
 Theorem P2 {A B : Type} `{FunctorLaws F} :
-  forall (x : A) (y : Select F (A -> B)),  
+  forall (x : A) (y : Select F (A -> B)),
   Select_select (Pure (inl x)) y = Select_map (fun k => k x) y.
   (* Select_select (Pure (inl x)) y = y <*> Pure x. *)
 Proof.
@@ -387,7 +382,7 @@ Obligation 1.
 (*   unfold law3_f, law3_h. simpl. *)
 (*   remember ((Either_map (E:=b) (fun (y : A) (f : A -> A) => f y))) as func1. *)
 (*   rewrite Select_Functor_law2. *)
-  
+
 
 (*   rewrite IH. *)
 (*   Check Select_select_equation_2. *)
@@ -412,7 +407,7 @@ Admitted.
 Obligation 2.
 (* pure (.) <*> u <*> v <*> w = u <*> (v <*> w) *)
 revert a b c v u w.
-intros A B C v u w.  
+intros A B C v u w.
 (* pure (.) <*> u <*> v <*> w = u <*> (v <*> w) *)
 Admitted.
 Obligation 4.
@@ -446,7 +441,7 @@ Theorem select_selective_law2_distr
   (z : Select F (A -> B)) :
   pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z).
 Proof.
-Admitted.        
+Admitted.
 
 Theorem select_selective_law3_assoc
   {A B C : Type} {F : Type -> Type} `{Functor F}
@@ -471,4 +466,3 @@ Proof.
   (*     destruct s0; *)
   (*     simpl; reflexivity. *)
 Admitted.
-

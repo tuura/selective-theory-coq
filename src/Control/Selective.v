@@ -31,35 +31,34 @@ Definition apS `{Selective f} {A B : Type}
 (* selectA x y = (\e f -> either f id e) <$> x <*> y *)
 Definition selectA `{Applicative f} {A B : Type}
            (x : f (Either A B)) (y : f (A -> B)) : f B :=
-  (fun e f => either f id e) <$> x <*> y. 
+  (fun e f => either f id e) <$> x <*> y.
 
-Module SelectiveLaws.
+(* Module SelectiveLaws. *)
 
-Include ApplicativeLaws. 
+(* Include ApplicativeLaws. *)
 
-Definition law3_f {A B C : Type}
-           (x : B + C) : B + (A + C) := Right <$> x.
+(* Definition law3_f {A B C : Type} *)
+(*            (x : B + C) : B + (A + C) := Right <$> x. *)
 
-Definition law3_g {A B C : Type}
-           (y : A + (B -> C)) : B -> A * B + C :=
-  fun a => Either_bimap (fun p => pair p a) (fun f => f a) y.
+(* Definition law3_g {A B C : Type} *)
+(*            (y : A + (B -> C)) : B -> A * B + C := *)
+(*   fun a => Either_bimap (fun p => pair p a) (fun f => f a) y. *)
 
-Definition law3_h  {A B C : Type}
-           (f : A -> B -> C) : A * B -> C :=
-  fun p => match p with
-           | pair x y => f x y
-           end.
+(* Definition law3_h  {A B C : Type} *)
+(*            (f : A -> B -> C) : A * B -> C := *)
+(*   fun p => match p with *)
+(*            | pair x y => f x y *)
+(*            end. *)
 
-Class SelectiveLaws (F : Type -> Type) `{Selective F} := {
-  has_applicative_laws :> ApplicativeLaws F;
+(* Class SelectiveLaws (F : Type -> Type) `{Selective F} := { *)
+(*   has_applicative_laws :> ApplicativeLaws F; *)
 
-  select_identity : forall (A : Type) (x : F (Either A A)), x <*? (pure id) = either id id <$> x;
-  select_distr    : forall (A B : Type) (x : Either A B) (y : F (A -> B)) (z : F (A -> B)),
-                    pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z);
-  select_assoc    : forall (A B C : Type) (x : F (Either B C)) (y : F (Either A (B -> C)))
-                                          (z : F (A -> B -> C)),
-                     x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z)
-}.
+(*   select_identity : forall (A : Type) (x : F (Either A A)), x <*? (pure id) = either id id <$> x; *)
+(*   select_distr    : forall (A B : Type) (x : Either A B) (y : F (A -> B)) (z : F (A -> B)), *)
+(*                     pure x <*? (y *> z) = (pure x <*? y) *> (pure x <*? z); *)
+(*   select_assoc    : forall (A B C : Type) (x : F (Either B C)) (y : F (Either A (B -> C))) *)
+(*                                           (z : F (A -> B -> C)), *)
+(*                      x <*? (y <*? z) = (law3_f <$> x) <*? (law3_g <$> y) <*? (law3_h <$> z) *)
+(* }. *)
 
-End SelectiveLaws.
- 
+(* End SelectiveLaws. *)
