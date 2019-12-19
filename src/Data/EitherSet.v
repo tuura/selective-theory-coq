@@ -3,6 +3,7 @@ Generalizable All Variables.
 Require Import Data.Functor.
 Require Import Control.Applicative.
 Require Import FunctionalExtensionality.
+Require Import Coq.Program.Basics.
 
 Notation Either := sum (only parsing).
 Notation Left   := inl (only parsing).

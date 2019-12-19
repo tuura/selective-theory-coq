@@ -4,6 +4,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 Generalizable All Variables.
+Set Universe Polymorphism.
 
 Ltac inv H  := inversion H; subst; simpl; clear H.
 Ltac contra := intros top; contradiction top; clear top.

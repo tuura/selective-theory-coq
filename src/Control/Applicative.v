@@ -2,13 +2,15 @@ Require Export Hask.Ltac.
 Require Export Hask.Data.Functor.
 Require Export Hask.Data.Functor.Const.
 Require Import FunctionalExtensionality.
+Require Import Coq.Classes.Morphisms.
+Require Import Coq.Setoids.Setoid.
 
 Generalizable All Variables.
 Set Universe Polymorphism.
 
 Reserved Notation "f <*> g" (at level 28, left associativity).
 
-Polymorphic Class Applicative (f : Type -> Type) := {
+Class Applicative (f : Type -> Type) := {
   is_functor :> Functor f;
 
   pure : forall a : Type, a -> f a;
@@ -18,6 +20,24 @@ Polymorphic Class Applicative (f : Type -> Type) := {
 
 Arguments pure {f _ _} _.
 Arguments ap   {f _ _ _} _ x.
+
+(* Add Parametric Morphism {A} `{Applicative F} : (@pure F _ A) *)
+(*   with signature (pointwise_relation _ eq ==> eq ==> eq) *)
+(*     as pure_isomorphism. *)
+(* Proof. *)
+(*   intros. *)
+(*   f_equal. *)
+(*   extensionality e. *)
+(*   apply H0. *)
+(* Qed. *)
+
+Lemma pure_ext : forall (A : Type) `(Applicative F) (x y : A),
+    x = y -> pure x = pure y.
+Proof. intros. now rewrite H0. Qed.
+
+(* Lemma t : forall (A : Type) `{Applicative F} (x y : A), *)
+(*     @pure F _ A x = pure y. *)
+(* Proof. intros. apply pure_ext. *)
 
 Notation "pure[ M ]" := (@pure M _ _) (at level 19, M at next level).
 Notation "pure[ M N ]" := (@pure (fun X => M (N X)) _ _) (at level 9).

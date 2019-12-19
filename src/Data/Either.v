@@ -3,6 +3,8 @@ Set Primitive Projections.
 Set Universe Polymorphism.
 Unset Transparent Obligations.
 
+Require Import Hask.Control.Iso.
+Require Import Hask.Prelude.
 Require Import Data.Functor.
 Require Import Control.Applicative.
 Require Import FunctionalExtensionality.
@@ -11,7 +13,7 @@ Require Import FunctionalExtensionality.
 (* Notation Left   := inl (only parsing). *)
 (* Notation Right  := inr (only parsing). *)
 
-Polymorphic Inductive Either (A B : Type) : Type :=
+Inductive Either (A B : Type) : Type :=
     Left  : A -> Either A B
   | Right : B -> Either A B.
 
@@ -29,39 +31,40 @@ Definition either `(f : a -> c) `(g : b -> c) (x : a + b) : c :=
   | Right b => g b
   end.
 
-Definition mapLeft `(f : a -> c) `(x : a + b) : c + b :=
+Definition mapLeft {A B C : Type} (f : A -> C) (x : A + B) : C + B :=
   match x with
   | Left l => Left (f l)
   | Right r => Right r
   end.
 
-Definition mapRight `(f : b -> d) `(x : a + b) : a + d :=
-  match x with
-  | Left l => Left l
-  | Right r => Right (f r)
-  end.
+(* Definition mapLeft `(f : a -> c) `(x : a + b) : c + b := *)
+(*   match x with *)
+(*   | Left l => Left (f l) *)
+(*   | Right r => Right r *)
+(*   end. *)
 
-Definition Either_map {E X Y} (f : X -> Y) (x : Either E X) : Either E Y :=
+Require Import FunctionalExtensionality.
+Require Import Coq.Classes.Morphisms.
+Require Import Coq.Setoids.Setoid.
+
+Add Parametric Morphism {A B C} : (fun f => @mapLeft A C B f)
+  with signature (pointwise_relation _ eq ==> eq ==> eq)
+    as mapLeft_isomorphism.
+Proof.
+  intros. f_equal. extensionality a. intuition.
+Qed.
+
+Definition mapRight {E X Y} (f : X -> Y) (x : Either E X) : Either E Y :=
   match x with
   | Left e   => Left e
   | Right x' => Right (f x')
   end.
 
-Lemma Either_map_comp_x :
-  forall (E A B C : Set)
-    (f : B -> C) (g : A -> B) (x : E + A),
-    Either_map f (Either_map g x) = Either_map (f \o g) x.
+Add Parametric Morphism {A B C} : (fun f => @mapRight A C B f)
+  with signature (pointwise_relation _ eq ==> eq ==> eq)
+    as mapRight_isomorphism.
 Proof.
-  intros E A B C f g x.
-  destruct x; trivial.
-Qed.
-
-Lemma Either_map_id {E X} :
-  @Either_map E X X id = id.
-Proof.
-  extensionality x.
-  destruct x;
-  reflexivity.
+  intros. f_equal. extensionality a. intuition.
 Qed.
 
 Definition Either_bimap {A B X Y} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
@@ -97,7 +100,7 @@ Definition Either_join {E X} (x : Either E (Either E X)) : Either E X :=
   end.
 
 Instance Either_Functor {E} : Functor (Either E) :=
-{ fmap := @Either_map E
+{ fmap := @mapRight E
 }.
 
 Import FunctorLaws.
@@ -110,10 +113,53 @@ Obligation 2.
 extensionality x. now destruct x.
 Defined.
 
+Lemma Either_fmap_left_cancel :
+  forall (A B C : Type) (f : B -> C),
+  fmap[Either A] f ∘ Left = Left.
+Proof. intros. extensionality x. now simpl. Qed.
+
+Lemma Either_bimap_fmap_fuse :
+  forall (A B C D X : Type)
+         (f : B -> C) (g : B -> D) (h : X -> B),
+  Either_bimap f g ∘ mapRight h = Either_bimap f (g ∘ h).
+Proof.
+  intros A B C D X f g h.
+  extensionality x.
+  now destruct x.
+Qed.
+
+Lemma Either_bimap_fmap_fuse_x :
+  forall (A B C D X : Type)
+         (f : B -> C) (g : B -> D) (h : X -> B) x,
+  Either_bimap f g (mapRight h x) = Either_bimap f (g ∘ h) x.
+Proof.
+  intros A B C D X f g h x.
+  now destruct x.
+Qed.
+
+Lemma Either_bimap_mapLeft_fuse :
+  forall (A B C D X : Type)
+         (f : B -> C) (g : B -> D) (h : C -> X),
+  mapLeft h ∘ Either_bimap f g = Either_bimap (h ∘ f) g.
+Proof.
+  intros A B C D X f g h.
+  extensionality x.
+  now destruct x.
+Qed.
+
+Lemma Either_bimap_mapLeft_fuse_x :
+  forall (A B C D X : Type)
+         (f : B -> C) (g : B -> D) (h : C -> X) x,
+  mapLeft h (Either_bimap f g x) = Either_bimap (h ∘ f) g x.
+Proof.
+  intros A B C D X f g h x.
+  now destruct x.
+Qed.
+
 Lemma Either_map_to_fmap :
   forall (A B C : Type)
          (f : B -> C),
-    @Either_map A B C f = fmap f.
+    @mapRight A B C f = fmap f.
 Proof. now simpl fmap. Qed.
 
 Instance Either_Applicative {E} : Applicative (Either E) :=

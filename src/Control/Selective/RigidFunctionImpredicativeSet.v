@@ -82,10 +82,10 @@ Defined.
 Local Coercion Select_add_void : Sortclass >-> Funclass.
 Local Coercion Select_drop_void : Sortclass >-> Funclass.
 
-Check (Select_add_void (Pure O)). 
+Check (Select_add_void (Pure O)).
 Set Printing Coercions.
-Check (Select_add_void (Pure O)). 
-Check (Select_drop_void (Select_add_void (Pure O))). 
+Check (Select_add_void (Pure O)).
+Check (Select_drop_void (Select_add_void (Pure O))).
 
 (* Definition Select_ind' *)
 (*      : forall (F : Type -> Type) (A B : Set) (P : forall {X : Set}, Select F (X + (A -> B)) -> Prop), *)
@@ -576,7 +576,7 @@ induction x.
   repeat rewrite Select_map_comp_x.
   remember (Select_map law3_f (Pure (Left (@id A)))) as p.
   simpl in Heqp.
-  subst p.  
+  subst p.
   rewrite Select_free_3_mkSelect.
   remember (id (MkSelect x f)) as rhs.
   unfold id in Heqrhs.
@@ -740,7 +740,7 @@ Proof.
   (* First, we use fmap_id to append an id application to the second argument of select *)
   assert ( Select_select (Pure (Left x)) y =
            Select_select (Pure (Left x)) (Select_map id y)) as H.
-  { now rewrite Select_Functor_law1. } 
+  { now rewrite Select_Functor_law1. }
   rewrite H. clear H.
   (* Now we use the third Selective Free Theorem to transfer the newly created id to the first argument
      of select and leave the second fmap'ed by the reverse function application *)
@@ -812,7 +812,7 @@ Theorem Select_Applicative_law4
         `{Functor F} `{FunctorLaws F} :
   forall (A B C : Set) (v : Select F (A -> B)) (u : Select F (B -> C))
     (w : Select F A),
-  (* pure (fun (f : b -> c) (g : a -> b) (x : a) => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w) *)
+  (* pure (fun (f : b -> c) (g : a -> b) (x : a) => pure f (g x)) <*> u <*> v <*> w = u <*> (v <*> w) *)
   Select_ap (Select_ap (Select_ap (Pure (fun (f : B -> C) (g : A -> B) (x : A) => f (g x))) u) v) w =
   Select_ap u (Select_ap v w).
 Proof.

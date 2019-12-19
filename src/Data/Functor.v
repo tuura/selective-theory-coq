@@ -2,6 +2,8 @@ Require Import Hask.Ltac.
 Require Import FunctionalExtensionality.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
+Require Import Coq.Program.Basics.
+Local Open Scope program_scope.
 
 Set Universe Polymorphism.
 Generalizable All Variables.
@@ -25,12 +27,19 @@ Notation "fmap[ M N ]" := (@fmap (fun X => M (N X)) _ _ _) (at level 9).
 Notation "fmap[ M N O ]" :=
   (@fmap (fun X => M (N (O X))) _ _ _) (at level 9).
 
+Definition Env (A : Type) := fun (B : Type) => A -> B.
+
+Global Instance Env_Functor (A : Type) : Functor (Env A) := {
+  fmap := fun A B f g => f ∘ g
+}.
+
+
 Module FunctorLaws.
 
-(* Functors preserve extensional equality for the applied function.
-   This is needed to perform setoid rewriting within the function
-   passed to a functor. *)
-Add Parametric Morphism {A B} `{Functor F} : (@fmap F _ A B)
+(* Functors preserve extensional equality for the applied function. *)
+(*    This is needed to perform setoid rewriting within the function *)
+(*    passed to a functor. *)
+Add Parametric Morphism {A B} `{Functor F} : (fun f => @fmap F _ A B f)
   with signature (pointwise_relation _ eq ==> eq ==> eq)
     as mul_isomorphism.
 Proof.

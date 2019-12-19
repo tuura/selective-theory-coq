@@ -10,15 +10,12 @@ Require Import Control.Selective.
 Require Import Coq.Strings.String.
 Require Import FunctionalExtensionality.
 
-
 Inductive Select (f : Type -> Type) (a : Type) :=
     Pure   : a -> Select f a
   | MkSelect : forall b, Select f (b + a) -> f (b -> a) -> Select f a.
 
 Arguments Pure {f} {a}.
 Arguments MkSelect {f} {a} {b}.
-
-Check Select_ind.
 
 Fixpoint Select_map {A B : Type} `{Functor F}
            (f : (A -> B)) (x : Select F A) : Select F B :=
@@ -32,8 +29,6 @@ Program Instance Select_Functor
   `{Functor F} : Functor (Select F) := {
   fmap := fun _ _ f x => Select_map f x
 }.
-
-Definition undefined {a : Type} : a. Admitted.
 
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
@@ -101,8 +96,8 @@ Proof.
 
   induction x using Select_ind'.
   - reflexivity.
-  -  
-  
+  -
+
   (* induction x as [| A b x' IH k]. *)
   (* - reflexivity. *)
   (* - simpl. *)

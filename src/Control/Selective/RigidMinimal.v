@@ -7,6 +7,9 @@ Require Import Control.Selective.
 Require Import FunctionalExtensionality.
 Require Import Omega.
 Require Import Equations.Equations.
+Require Import Coq.Logic.FunctionalExtensionality.
+Require Import Coq.Setoids.Setoid.
+Require Import Coq.Classes.Morphisms.
 
 Set Universe Polymorphism.
 Generalizable All Variables.
@@ -18,7 +21,7 @@ Inductive Select (F : Type -> Type) (A : Type) :=
 Arguments Pure {F} {A}.
 Arguments MkSelect {F} {A} {B}.
 
-Equations Select_map {A B : Type} {F : Type -> Type} `{Functor F}
+Equations Select_map {A B : Type} `{Functor F}
            (f : A -> B) (x : Select F A) : Select F B :=
 Select_map f (Pure a)       => Pure (f a);
 Select_map f (MkSelect x y) => MkSelect (Select_map (fmap f) x)
@@ -28,6 +31,10 @@ Equations Select_depth {A : Type} {F : Type -> Type}
          (x : Select F A) : nat :=
 Select_depth (Pure a)       := O;
 Select_depth (MkSelect y _) := S (Select_depth y).
+
+Instance Select_Functor {F : Type -> Type} {_ : Functor F} : Functor (Select F) := {
+  fmap := fun _ _ f x => Select_map f x
+}.
 
 Lemma Select_fmap_preserves_depth {A B : Type} `{Functor F} :
   forall (x : Select F A) (f : A -> B),
@@ -39,15 +46,10 @@ Proof.
   - repeat rewrite Select_map_equation_2. simp Select_depth. now rewrite IH.
 Qed.
 
-Program Instance Select_Functor `{Functor F} : Functor (Select F) := {
-  fmap := fun _ _ f x => Select_map f x
-}.
 
 Import FunctorLaws.
 
 Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
-(* Theorem Select_Functor_law1 {A : Type} *)
-(*         `{Functor F} `{FunctorLaws F} : *)
 (*   forall (x : Select F A), fmap id x = id x. *)
 Obligation 1.
 unfold id.
@@ -62,10 +64,7 @@ f_equal; repeat rewrite H_subst_id in *; rewrite fmap_id.
 - now rewrite IHx.
 - now unfold id.
 Qed.
-(* Theorem Select_Functor_law2 {A B C : Type} *)
-(*         `{Functor F} `{FunctorLaws F} : *)
-(*   forall (f : B -> C) (g : A -> B) (x : Select F A), *)
-(*   ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x. *)
+(*   fmap f ∘ fmap g = fmap (f ∘ g). *)
 Obligation 2.
 extensionality x.
 simpl.
@@ -76,11 +75,16 @@ induction x.
   repeat rewrite Select_map_equation_2.
   f_equal.
   + rewrite <- fmap_comp. now rewrite IHx.
-  + admit.
-Admitted.
+  + unfold "∘". now rewrite fmap_comp_x.
+Qed.
 
 Definition law3_f {A B C : Type}
            (x : B + C) : B + (A + C) := Right <$> x.
+
+Lemma law3_f_cancel :
+  forall (A B C : Type),
+  (@law3_f A _ _) ∘ (@Left B C) = Left.
+Proof. intros. extensionality x. now simpl. Qed.
 
 Definition law3_g {A B C : Type}
            (y : A + (B -> C)) : B -> A * B + C :=
@@ -89,14 +93,878 @@ Definition law3_g {A B C : Type}
 Definition law3_h  {A B C : Type}
            (f : A -> B -> C) : A * B -> C := uncurry f.
 
-Equations Select_select {A B : Type} `{Functor F}
+Equations Select_select {A B : Type} {F : Type -> Type} {HF : Functor F}
           (x : Select F (A + B)) (handler : Select F (A -> B))
   : (Select F B) by wf (Select_depth handler) lt :=
-Select_select x (Pure y) := Select_map (either y id) x;
+Select_select x (Pure y) := fmap[Select F] (either y id) x;
 Select_select x (MkSelect y z) :=
-  MkSelect (Select_select (Select_map law3_f x) (Select_map law3_g y)) (fmap law3_h z).
+  MkSelect (Select_select (fmap[Select F] law3_f x) (fmap[Select F] law3_g y))
+           (fmap[F] law3_h z).
 Obligation 1.
+simpl.
 rewrite Select_fmap_preserves_depth.
 rewrite Select_depth_equation_2.
 omega.
+Defined.
+
+Definition Select_ap {A B : Type} `{Functor F}
+           (f : Select F (A -> B)) (x : Select F A) : Select F B :=
+  Select_select (Left <$> f) (rev_f_ap <$> x).
+
+Lemma Select_ap_unfold  {A B : Type} `{Functor F}
+           {f : Select F (A -> B)} {x : Select F A} :
+  Select_ap f x = Select_select (Left <$> f) (rev_f_ap <$> x).
+Proof. now reflexivity. Qed.
+
+(***************************************************************)
+Global Instance Select_Applicative `{Functor F} : Applicative (Select F) := {
+  pure _ x := Pure x;
+  ap _ _ f x  := Select_ap f x
+}.
+
+Import ApplicativeLaws.
+
+Import SelectiveParametricity.
+
+Theorem free_theorem_1_MkSelect :
+  forall (A B C : Type) `{Functor F} (f : B -> C)
+         (x : Select F (A + B)%type)
+         (y : F (A -> B)),
+    f <$> (MkSelect x y) =
+    MkSelect (fmap[Either A] f <$> x)
+             (fmap[Env A] f <$> y).
+Proof.
+  intros. simpl fmap. reflexivity.
 Qed.
+
+Theorem free_theorem_2_MkSelect `{Functor F} :
+  forall (A B C : Type) (f : A -> C) (x : Select F (A + B)) (y : F (C -> B)),
+    MkSelect (mapLeft f <$> x) y = MkSelect x (fmap (fun g : C -> B => g \o f) y).
+Admitted.
+
+Theorem free_theorem_3_MkSelect `{Functor F} :
+  forall (A B C : Type) (f : C -> A -> B)
+                   (x : Select F (A + B))
+                   (y : F C),
+    MkSelect x (f <$> y) = MkSelect (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
+Proof.
+Admitted.
+
+Global Instance Select_Selective `{Functor F} : Selective (Select F) := {
+  select _ _ x f := Select_select x f
+}.
+
+Lemma Select_select_to_infix :
+  forall (A B : Type) `{Functor F}
+  (x : Select F (A + B)%type) (y : Select F (A -> B)),
+  Select_select x y = x <*? y.
+Proof. reflexivity. Qed.
+
+Lemma Select_fmap_unfold :
+  forall (A B : Type) `{Functor F}
+  (x : Select F A) (f : A -> B),
+  fmap f x = Select_map f x.
+Proof. reflexivity. Qed.
+
+Ltac pretty_fmaps := repeat (try rewrite <- Select_fmap_unfold).
+
+Ltac pretty_selects :=
+  repeat rewrite Select_select_to_infix.
+
+Lemma fold_compose :
+  forall A B C (f : B -> C) (g : A -> B), Basics.compose f g = f ∘ g.
+  trivial. Qed.
+
+Local Notation "→ B" := (Env B) (at level 0).
+
+Local Tactic Notation
+  "`Begin " constr(lhs) := idtac.
+
+Local Tactic Notation
+  "≡⟨ " tactic(proof) "⟩" constr(lhs) :=
+  (stepl lhs by proof).
+
+Local Tactic Notation
+  "≡⟨ " tactic(proof) "⟩" constr(lhs) "`End" :=
+  (now stepl lhs by proof).
+
+Section Select_ApplicativeLaws_Proofs.
+
+Context (F : Type -> Type).
+Context (FFunctor : Functor F).
+Context (FFunctorLaws : FunctorLaws F).
+
+Lemma boring_details :
+  forall (A B X : Type) (g : A -> X),
+  ((Either_bimap (fun (y : B) (h : B -> A) => g (h y)) g) = (
+    ((flip ((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+      law3_g ∘ fmap[ Either B] rev_f_ap))) g)).
+Proof. intros. extensionality z; now destruct z. Qed.
+
+Lemma boring_details_2:
+      forall (A B : Type)
+        (X : Type) (g : A -> X),
+          (Either_bimap (fun y h  => g (h y)) g) =
+          (flip ((fun g0  => (mapLeft (flip (fun g1 : B -> A => g ∘ g1))) ∘ g0) ∘ rev_f_ap)
+                (mapRight g)).
+Proof. intros A B X g. extensionality x. now destruct x. Qed.
+
+Lemma ap_fmap_selectors_equal :
+  forall (A B : Type) (x : Select F (B + A)) (f : F (B -> A)) (X : Type) (g : A -> X),
+  mapLeft (flip (fmap[→B] g)) <$>
+      (select (fmap[ Select F] Left ((pure[ Select F]) (fmap[ Either B] g)))
+              (fmap[ Select F] rev_f_ap x)) =
+  mapLeft (flip (law3_h \o fmap[→B] rev_f_ap)) <$>
+      (select (fmap[ Select F] (law3_f \o Left) ((pure[ Select F]) g))
+              (fmap[ Select F] (law3_g \o fmap[ Either B] rev_f_ap) x)).
+Proof.
+  intros A B x f X g.
+`Begin
+    (mapLeft (flip (fmap[→B] g)) <$>
+        (select (fmap Left ((pure (fmap[ Either B] g))))
+                (fmap[ Select F] rev_f_ap x))).
+  ≡⟨ reflexivity ⟩
+    (mapLeft (flip (fmap[→B] g)) <$>
+        (select (pure (Left (fmap[Either B] g)))
+                (fmap[ Select F] rev_f_ap x))).
+  ≡⟨ now rewrite <- free_theorem_1 ⟩
+       (select ((fmap[Either _] (mapLeft (flip (fmap[ → (B)] g)))) <$>
+                    (pure[Select F] (Left (fmap[Either B] g))))
+               ((fmap[→_] (mapLeft (flip (fmap[ → (B)] g)))) <$>
+                    (fmap[ Select F] rev_f_ap x))).
+  ≡⟨ reflexivity ⟩
+       (select (pure[Select F] (Left (fmap[Either B] g)))
+               ((fmap[→_] (mapLeft (flip (fmap[ → (B)] g)))) <$>
+                    (fmap[ Select F] rev_f_ap x))).
+  ≡⟨ reflexivity ⟩
+       (select (pure[Select F] (Left (fmap[Either B] g)))
+               ((fmap[→_] (mapLeft (flip (fmap[ → (B)] g)))) <$>
+                    (rev_f_ap <$> x))).
+  ≡⟨ now setoid_rewrite fmap_comp_x ⟩
+       (select (pure[Select F] (Left (fmap[Either B] g)))
+               ((((fmap[→_] (mapLeft (flip (fmap[ → (B)] g)))) ∘ rev_f_ap) <$> x))).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+       (select ((mapLeft (flip
+     (((fmap[→_] (mapLeft (flip (fmap[ → (B)] g)))) ∘ rev_f_ap)))) <$>
+                 pure[Select F] (Left (fmap[Either B] g)))
+               (rev_f_ap <$> x)).
+  ≡⟨ specialize (boring_details_2);
+    intros L;
+    cbv in *; simp Select_map;
+    now rewrite <- L ⟩
+       (select (pure (Left (Either_bimap (fun (y : B) (h : B -> A) => g (h y)) g)))
+               (rev_f_ap <$> x)).
+  ≡⟨ now rewrite boring_details ⟩
+       (select ((pure (Left (
+           ((flip ((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+           law3_g ∘ fmap[ Either B] rev_f_ap))) g))) )
+               (rev_f_ap <$> x)).
+  ≡⟨ reflexivity ⟩
+       (select ((mapLeft (flip ((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+                 law3_g ∘ fmap[ Either B] rev_f_ap))) <$>
+                (pure[ Select F] (Left g)) )
+               (rev_f_ap <$> x)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+       (select ((pure[ Select F]) (Left g))
+               ((((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+                  law3_g ∘ fmap[ Either B] rev_f_ap) <$> x))).
+  ≡⟨ reflexivity ⟩
+       (select ((fmap[ Select F]
+                     ((fmap[Either _] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+                     (fmap Right) ∘ Left) ((pure[ Select F]) g)))
+               ((((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
+                  law3_g ∘ fmap[ Either B] rev_f_ap) <$> x))).
+  ≡⟨ unfold law3_f; now repeat rewrite fmap_comp_x ⟩
+       (select (fmap[Either _] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap)))) <$>
+                    (fmap[ Select F] (law3_f ∘ Left) ((pure[ Select F]) g)))
+               (fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap)))) <$>
+                    (fmap[ Select F] (law3_g ∘ fmap[ Either B] rev_f_ap) x))).
+  ≡⟨ now rewrite <- free_theorem_1 ⟩
+       ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))) <$>
+    select (fmap[ Select F] (law3_f ∘ Left) ((pure[ Select F]) g))
+           (fmap[ Select F] (law3_g ∘ fmap[ Either B] rev_f_ap) x))
+  `End.
+Qed.
+
+Theorem Select_ap_fmap :
+  forall (A B : Type) (x : Select F A) (f : A -> B),
+  pure[Select F] f <*> x = fmap f x.
+Proof.
+  intros A B x f.
+  generalize dependent B.
+  generalize dependent A.
+  induction x; trivial.
+  - intros X g.
+    specialize (IHx (B + X)%type (fmap[Either B] g)).
+    `Begin
+     (pure g <*> (MkSelect x f)).
+    ≡⟨ reflexivity ⟩
+     (select (fmap[ Select F] Left (Pure g))
+             (fmap[ Select F] rev_f_ap (MkSelect x f))).
+    ≡⟨ reflexivity ⟩
+     (select (fmap[ Select F] Left (Pure g))
+             (MkSelect (fmap (fmap[ Either B] rev_f_ap) x)
+                       (fmap[ F] (fmap[→B] rev_f_ap) f))).
+    ≡⟨ simpl select; now simp Select_select ⟩
+     (MkSelect
+       (select (fmap[ Select F] law3_f (fmap Left (pure g)))
+               (fmap[ Select F] law3_g (fmap[Select F] (fmap rev_f_ap) x)))
+       (fmap[ F] law3_h (fmap[ F] (fmap[→B] rev_f_ap) f))).
+    ≡⟨ now repeat rewrite <- fmap_comp ⟩
+    (MkSelect
+       (select (fmap (law3_f ∘ Left) (pure g))
+               (fmap (law3_g ∘ (fmap rev_f_ap)) x))
+       (fmap (law3_h ∘ (fmap[→B] rev_f_ap)) f)).
+    ≡⟨ now setoid_rewrite <- free_theorem_3_MkSelect ⟩
+    (MkSelect
+       (mapLeft (flip (law3_h ∘ (fmap[→B] rev_f_ap))) <$>
+          (select (fmap (law3_f ∘ Left) (pure g))
+                  (fmap (law3_g ∘ (fmap rev_f_ap)) x)))
+       (fmap rev_f_ap f)).
+    ≡⟨ now rewrite ap_fmap_selectors_equal ⟩
+     (MkSelect
+        (mapLeft (flip (fmap[→B] g)) <$>
+           (select (fmap Left (pure (fmap[Either B] g)))
+                   (fmap rev_f_ap x)))
+        (fmap rev_f_ap f)).
+    ≡⟨ now setoid_rewrite <- free_theorem_3_MkSelect ⟩
+     (MkSelect
+        (select (fmap Left (pure (fmap[Either B] g)))
+                (fmap rev_f_ap x))
+        ((fmap[→B] g) <$> f)).
+    ≡⟨ reflexivity ⟩
+     (MkSelect (pure (fmap[Either B] g) <*> x) ((fmap[→B] g) <$> f)).
+    ≡⟨ now setoid_rewrite IHx ⟩
+     (MkSelect ((fmap[Either B] g) <$> x) ((fmap[→B] g) <$> f)).
+    ≡⟨ reflexivity ⟩
+     (fmap g (MkSelect x f))
+    `End.
+Qed.
+
+Theorem Select_ApplicativeLaws_interchange :
+  forall (A B : Type) (u : Select F (A -> B)) (y : A),
+  u <*> pure y = pure (rev_f_ap y) <*> u.
+Proof.
+  intros A B u y.
+  destruct u as [ f | X v g ] .
+  -`Begin
+    (pure[Select F] f <*> pure y).
+   ≡⟨ reflexivity ⟩
+    (Select_ap (Pure f) (pure y)).
+   ≡⟨ reflexivity ⟩
+    (select (Left <$> pure f) (rev_f_ap <$> pure y)).
+   ≡⟨ reflexivity ⟩
+    (select (Left <$> pure f) (pure (rev_f_ap y))).
+   ≡⟨ reflexivity ⟩
+    (select (Left <$> pure f) (pure (rev_f_ap y))).
+   ≡⟨ now rewrite <- Select_select_equation_1 ⟩
+    ((either (rev_f_ap y) (@id _)) <$> (pure[Select F] (Left f))).
+   ≡⟨ reflexivity ⟩
+    (pure[Select F] (rev_f_ap y f)).
+   ≡⟨ simpl "<$>"; now rewrite Select_map_equation_1 ⟩
+    (rev_f_ap y <$> (pure[Select F] f)).
+   ≡⟨ now rewrite Select_ap_fmap ⟩
+    (pure[Select F] (rev_f_ap y) <*> pure f)
+   `End.
+  -`Begin
+    (MkSelect v g <*> pure y).
+   ≡⟨ reflexivity ⟩
+    (Select_ap (MkSelect v g) (pure y)).
+   ≡⟨ reflexivity ⟩
+    (select (Left <$> (MkSelect v g)) (rev_f_ap <$> pure y)).
+   ≡⟨ reflexivity ⟩
+    (select (Left <$> (MkSelect v g)) (pure (rev_f_ap y))).
+   ≡⟨ now rewrite <- Select_select_equation_1 ⟩
+    ((either (rev_f_ap y) id) <$> (Left <$> (MkSelect v g))).
+   ≡⟨ now rewrite <- fmap_comp ⟩
+    (((either (rev_f_ap y) id) ∘ Left) <$> (MkSelect v g)).
+   ≡⟨ trivial ⟩
+    (rev_f_ap y <$> MkSelect v g).
+   ≡⟨ now rewrite Select_ap_fmap ⟩
+    (pure (rev_f_ap y) <*> (MkSelect v g))
+  `End.
+Qed.
+
+Lemma boring_details_3:
+  forall (A : Type) (a : A) (B : Type),
+    Select F (A -> B) ->
+    forall (C : Type) (u : Select F (B -> C)),
+      (mapLeft (B := C) (flip (rev_f_ap ∘ rev_f_ap a))) <$> (Left <$> u) =
+      (mapLeft (flip (comp (rev_f_ap a) ∘ rev_f_ap))) <$> (Left <$> (comp <$> u)).
+Proof.
+  intros A a B v C u.
+  repeat rewrite fmap_comp_x.
+  f_equal.
+Qed.
+
+Ltac functor_laws :=
+  repeat
+    match goal with
+    | [ |- context[fmap[?F] id] ] =>
+      rewrite fmap_id
+    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
+      rewrite fmap_comp_x
+    | [ |- context[fmap[?F] id] ] =>
+      setoid_rewrite fmap_id
+    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
+      setoid_rewrite fmap_comp_x
+    end; auto.
+
+Lemma mapLeft_drag_into_left : forall (A B X: Type) (F : Type -> Type) (H : Functor F)
+                                 (f : A -> B) (x : F A),
+    (mapLeft f ∘ (@Left A X)) <$> x = (Left ∘ f) <$> x.
+Proof. intros. f_equal. Qed.
+
+Theorem comp_assoc : forall {A B C D} (f : C -> D) (g : B -> C) (h : A -> B),
+      f ∘ (g ∘ h) = (f ∘ g) ∘ h.
+Proof. reflexivity. Qed.
+
+Hint Resolve comp_assoc.
+
+Theorem Select_ApplicativeLaws_composition :
+  forall (A B C : Type)
+  (u : Select F (B -> C)) (v : Select F (A -> B)) (w : Select F A),
+  pure[Select F] comp <*> u <*> v <*> w = u <*> (v <*> w).
+Proof.
+  intros A B C u v w.
+  `Begin
+   (pure comp <*> u <*> v <*> w).
+  ≡⟨ reflexivity ⟩
+   ((pure comp <*> u) <*> v <*> w).
+  ≡⟨ now rewrite Select_ap_fmap ⟩
+   ((comp <$> u) <*> v <*> w).
+  ≡⟨ reflexivity ⟩
+   ((comp <$> u <*> v) <*> w).
+  generalize dependent C. generalize dependent B. generalize dependent A.
+  induction w.
+  - intros B v C u.
+  `Begin
+   ((comp <$> u <*> v) <*> pure a).
+  ≡⟨ reflexivity ⟩
+   (select (Left <$> (comp <$> u <*> v)) (rev_f_ap <$> pure a)).
+  ≡⟨ reflexivity ⟩
+   (select (Left <$> (comp <$> u <*> v)) (pure (rev_f_ap a))).
+  ≡⟨ reflexivity ⟩
+   (either (rev_f_ap a) id <$> (Left <$> (comp <$> u <*> v))).
+  ≡⟨ functor_laws ⟩
+   ((either (rev_f_ap a) id ∘ Left) <$> (comp <$> u <*> v)).
+  ≡⟨ trivial ⟩
+   ((rev_f_ap a <$> ((comp <$> u) <*> v))).
+  ≡⟨ reflexivity ⟩
+   (rev_f_ap a <$> (select (Left <$> (comp <$> u)) (rev_f_ap <$> v))).
+  ≡⟨ now rewrite <- free_theorem_1 ⟩
+   ((select ((fmap (rev_f_ap a)) <$> (Left <$> (comp <$> u)))
+            ((comp (rev_f_ap a)) <$> (rev_f_ap <$> v)))).
+  ≡⟨ functor_laws ⟩
+   ((select ((fmap (rev_f_ap a) ∘ Left) <$> (comp <$> u))
+            (((comp (rev_f_ap a)) ∘ rev_f_ap) <$> v))).
+  ≡⟨ trivial ⟩
+   (select (Left <$> (comp <$> u))
+           (((comp (rev_f_ap a)) ∘ rev_f_ap) <$> v)).
+  ≡⟨ now rewrite <- (@free_theorem_3 _) ⟩
+   (select ((mapLeft (flip (((comp (rev_f_ap a)) ∘ rev_f_ap)))) <$> (Left <$> (comp <$> u)))
+           (rev_f_ap <$> v)).
+  ≡⟨ now rewrite boring_details_3 ⟩
+   (select ((mapLeft (flip (rev_f_ap ∘ (rev_f_ap a)))) <$> (Left <$> u))
+           (rev_f_ap <$> v)).
+  ≡⟨ now rewrite <- (@free_theorem_3 _) ⟩
+   (select (Left <$> u)
+           ((rev_f_ap ∘ (rev_f_ap a)) <$> v)).
+  ≡⟨ functor_laws ⟩
+   (select (Left <$> u) (rev_f_ap <$> (rev_f_ap a <$> v))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (rev_f_ap a <$> v)).
+  ≡⟨ trivial ⟩
+   (u <*> ((either (rev_f_ap a) id ∘ Left) <$> v)).
+  ≡⟨ functor_laws ⟩
+   (u <*> (either (rev_f_ap a) id <$> (Left <$> v))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (select (Left <$> v) (rev_f_ap <$> pure a))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (v <*> pure a))
+  `End.
+  - intros X v C u.
+  `Begin
+   ((fmap comp u <*> v) <*> MkSelect w f).
+  ≡⟨ reflexivity ⟩
+   (select (Left <$> (fmap comp u <*> v)) (rev_f_ap <$> MkSelect w f)).
+  ≡⟨ reflexivity ⟩
+   (select (Left <$> (fmap comp u <*> v))
+           (MkSelect ((fmap[Either _] rev_f_ap) <$> w) ((fmap[→_] rev_f_ap) <$> f))).
+  ≡⟨ simpl select; now rewrite Select_select_equation_2 ⟩
+   (MkSelect (select (law3_f <$> (Left <$> (fmap comp u <*> v)))
+                     (law3_g <$> ((fmap[Either _] rev_f_ap) <$> w)))
+             (law3_h <$> ((fmap[→_] rev_f_ap) <$> f))).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select ((law3_f ∘ Left) <$> (fmap comp u <*> v))
+                     ((law3_g ∘ (fmap[Either _] rev_f_ap)) <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+   (MkSelect (select (mapLeft (flip (law3_g ∘ (fmap[Either _] rev_f_ap))) <$>
+                       ((law3_f ∘ Left) <$> (fmap comp u <*> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select ((mapLeft (flip (law3_g ∘ (fmap rev_f_ap))) ∘ law3_f ∘ Left) <$>
+                       (fmap comp u <*> v))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ rewrite <- comp_assoc; unfold law3_f; now rewrite Either_fmap_left_cancel ⟩
+   (MkSelect (select ((mapLeft (flip (law3_g ∘ (fmap rev_f_ap))) ∘ Left) <$>
+                       (fmap comp u <*> v))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ now rewrite mapLeft_drag_into_left ⟩
+   (MkSelect (select ((Left ∘ flip (law3_g ∘ (fmap rev_f_ap))) <$>
+                       (fmap comp u <*> v))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  remember (flip (law3_g ∘ (fmap rev_f_ap))) as z.
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (Left <$> (z <$> (fmap comp u <*> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ reflexivity ⟩
+   (MkSelect (select (Left <$> (z <$> (select (Left <$> fmap comp u)
+                                              (rev_f_ap <$> v))))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ now rewrite <- free_theorem_1  ⟩
+   (MkSelect (select (Left <$> (select (fmap[Either _] z <$> (Left <$> fmap comp u))
+                                       (fmap[→_]       z <$> (rev_f_ap <$> v))))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ functor_laws  ⟩
+   (MkSelect (select (Left <$> (select ((fmap[Either _] z ∘ Left)     <$> fmap comp u)
+                                       ((fmap[→_]       z ∘ rev_f_ap) <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ trivial ⟩
+   (MkSelect (select (Left <$> (select (Left <$> fmap comp u)
+                                       ((fmap[→_] z ∘ rev_f_ap) <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+   (MkSelect (select (Left <$> (select ((mapLeft (flip (fmap[→_] z ∘ rev_f_ap))) <$>
+                                        (Left <$> fmap comp u))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (Left <$> (select ((mapLeft (flip (fmap[→_] z ∘ rev_f_ap)) ∘ Left) <$>
+                                        (fmap comp u))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ reflexivity ⟩
+   (MkSelect (select (Left <$> (select ((Left ∘ (flip (fmap[→_] z ∘ rev_f_ap))) <$>
+                                        (fmap comp u))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (Left <$> (select (Left <$> ((flip (fmap[→_] z ∘ rev_f_ap)) <$>
+                                        (fmap comp u)))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (Left <$> (select (Left <$> (((flip (fmap[→_] z ∘ rev_f_ap)) ∘ comp) <$>
+                                        u))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  assert ((((flip (fmap[→_] z ∘ rev_f_ap)) ∘ comp) <$> u) =
+          ((fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) <$> u)) as H.
+  { f_equal. rewrite Heqz. extensionalize. }
+  ≡⟨ now rewrite H ⟩
+   (MkSelect (select (Left <$> (select (Left <$>
+                               ((fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) <$> u))
+                                       (rev_f_ap <$> v)))
+                     (rev_f_ap <$> w))
+             ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
+  clear H Heqz z. remember (fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) as z'.
+  ≡⟨ now rewrite <- free_theorem_3_MkSelect ⟩
+   (MkSelect ((mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap)))) <$>
+              (select (Left <$> (select (Left <$> (z' <$> u))
+                                        (rev_f_ap <$> v)))
+                      (rev_f_ap <$> w)))
+             (rev_f_ap <$> f)).
+  ≡⟨ now rewrite <- free_theorem_1 ⟩
+   (MkSelect ((select ((fmap[Either _]
+                       (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) <$>
+                       (Left <$> (select (Left <$> (z' <$> u))
+                                         (rev_f_ap <$> v))
+                      ))
+                      ((fmap[→_] (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) <$>
+                       (rev_f_ap <$> w))))
+             (rev_f_ap <$> f)).
+  remember (fmap[→_] (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) as p.
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (Left <$> (select (Left <$> (z' <$> u))
+                                         (rev_f_ap <$> v))
+                     )
+                     ((p ∘ rev_f_ap) <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+   (MkSelect (select (mapLeft (flip (p ∘ rev_f_ap)) <$>
+                              (Left <$> (select (Left <$> (z' <$> u))
+                                                (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select (((mapLeft (flip (p ∘ rev_f_ap)) ∘ Left) <$>
+                                (select (Left <$> (z' <$> u))
+                                        (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ now rewrite mapLeft_drag_into_left ⟩
+   (MkSelect (select (((Left ∘ flip (p ∘ rev_f_ap)) <$> (select (Left <$> (z' <$> u))
+                                                               (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select ((Left <$> (flip (p ∘ rev_f_ap) <$>
+                       (select (Left <$> (z' <$> u))
+                               (rev_f_ap <$> v))))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ now setoid_rewrite <- free_theorem_1 ⟩
+   (MkSelect (select ((Left <$>
+                       (select ((fmap (flip (p ∘ rev_f_ap))) <$> (Left <$> (z' <$> u)))
+                               ((fmap[→_] (flip (p ∘ rev_f_ap))) <$> (rev_f_ap <$> v))))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ functor_laws; now rewrite Either_fmap_left_cancel ⟩
+   (MkSelect (select ((Left <$>
+                       (select (Left <$> (z' <$> u))
+                               ((fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap) <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+   (MkSelect (select ((Left <$> (select
+      (mapLeft (flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap)) <$> (Left <$> (z' <$> u)))
+      (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ functor_laws; now rewrite mapLeft_drag_into_left ⟩
+   (MkSelect (select ((Left <$> (select
+      ((Left <$> ((flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap)) <$> (z' <$> u))))
+      (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  ≡⟨ functor_laws ⟩
+   (MkSelect (select ((Left <$> (select
+      ((Left <$> (((flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap)) ∘ z') <$> u)))
+      (rev_f_ap <$> v)))
+                     )
+                     (rev_f_ap <$> w)
+             )
+             (rev_f_ap <$> f)).
+  remember ((flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap)) ∘ z') as z''.
+  rewrite Heqz' in Heqz''. clear Heqz' z'.
+  ≡⟨ reflexivity ⟩
+   (MkSelect (((z'' <$> u) <*> v) <*> w)
+             (rev_f_ap <$> f)).
+  ≡⟨ admit ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select (Left <$> v)
+                ((fun y =>
+            fmap[→_]
+              (fmap[→_]
+                 (mapLeft
+                    (flip
+                       (((law3_h ∘ fmap[→_] rev_f_ap) ∘ law3_h) ∘ fmap[→_] rev_f_ap))))
+              ((((fmap[→_] law3_g ∘ fmap[→_] (fmap rev_f_ap)) ∘ law3_g) ∘
+                  fmap[ Either B] rev_f_ap) y)) <$> w))))
+    (rev_f_ap <$> f)).
+  remember ((fun y =>
+            fmap[→_]
+              (fmap[→_]
+                 (mapLeft
+                    (flip
+                       (((law3_h ∘ fmap[→_] rev_f_ap) ∘ law3_h) ∘ fmap[→_] rev_f_ap))))
+              ((((fmap[→_] law3_g ∘ fmap[→_] (fmap rev_f_ap)) ∘ law3_g) ∘
+                  fmap[ Either B] rev_f_ap) y))) as t.
+  ≡⟨ admit ⟩
+   (MkSelect (((z'' <$> u) <*> v) <*> w)
+             (rev_f_ap <$> f)).
+  ≡⟨ f_equal ⟩
+  (MkSelect
+    (fmap comp (rev_f_ap <$> u) <*> (flip t <$> v) <*> w)
+    (rev_f_ap <$> f)
+  ).
+  (* admit. *)
+  (* f_equal. *)
+  (* `Begin *)
+  (* (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v). *)
+  (* ≡⟨ reflexivity ⟩ *)
+  (* (select (Left <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u))) *)
+  (*         (rev_f_ap <$> (fmap[ Select F] (flip t) v))). *)
+  (* ≡⟨ admit ⟩ *)
+  (* (select (Left <$> (flip (rev_f_ap ∘ flip t) <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)))) *)
+  (*         (rev_f_ap <$> v)). *)
+  (* ≡⟨ admit ⟩ *)
+  (* (select (Left <$> ((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u)) *)
+  (*         (rev_f_ap <$> v)). *)
+  (* ≡⟨ admit ⟩ *)
+  (* (((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u) <*> v). *)
+  (* f_equal. *)
+  (* f_equal. *)
+  (* rewrite Heqt. rewrite Heqz''. rewrite Heqp. *)
+  (* extensionalize. *)
+  (* ≡⟨ admit ⟩ *)
+  (* (fmap[ Select F] t (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)) <*>  v). *)
+
+
+  (* (MkSelect *)
+  (*   (select (Left <$> u) *)
+  (*      ((select (Left <$> v) *)
+  (*               (t <$> w)))) *)
+  (*   (rev_f_ap <$> f)). *)
+  (* ≡⟨ admit ⟩ *)
+  (*  (MkSelect (mapLeft (flip ((law3_h ∘ (fmap[→_] rev_f_ap)))) <$> (fmap z' u <*> v <*> w)) *)
+  (*            (rev_f_ap <$> f)). *)
+  (* ≡⟨ f_equal ⟩ *)
+  (* (MkSelect *)
+  (*   (fmap comp (rev_f_ap <$> u) <*> (flip t <$> v) <*> w) *)
+  (*   (rev_f_ap <$> f) *)
+  (* ). *)
+  (* admit. *)
+
+  (* symmetry. *)
+  (* rewrite fmap_comp_x. *)
+
+  (* `Begin *)
+  (* (((mapLeft (flip (law3_h ∘ fmap[→_] rev_f_ap)))fmap[ Select F] z' u <*> v <*> w)). *)
+  (* ≡⟨ admit ⟩ *)
+  (* (fmap[ Select F] (mapLeft (flip (law3_h \o fmap[ → (B)] rev_f_ap))) *)
+  (*      (fmap[ Select F] z' u <*> v <*> w)). *)
+  (* `Begin *)
+  (* ((fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v) <*> w). *)
+  (* ≡⟨ admit ⟩ *)
+  (* ((fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v) <*> w). *)
+  ≡⟨ now rewrite IHw ⟩
+  (MkSelect
+    ((rev_f_ap <$> u) <*> ((flip t <$> v) <*> w))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ reflexivity ⟩
+  (MkSelect
+    (select (Left <$> (rev_f_ap <$> u))
+            (rev_f_ap <$> ((flip t <$> v) <*> w)))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ admit ⟩
+  (MkSelect
+    (select (Left <$> u)
+            ((flip t <$> v) <*> w))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ reflexivity ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select (Left <$> (flip t <$> v))
+                (rev_f_ap <$> w))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ functor_laws; now rewrite mapLeft_drag_into_left ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select (mapLeft (flip t) <$> (Left <$> v))
+                (rev_f_ap <$> w))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select (Left <$> v)
+                (t <$> w))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ admit ⟩
+  (MkSelect
+    (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))) <$>
+      select (Left <$> u)
+       ((select (Left <$> v)
+                ((fmap law3_g ∘ fmap[→_] (fmap[Either _] rev_f_ap) ∘
+                       law3_g ∘ fmap rev_f_ap) <$> w))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ admit ⟩
+  (MkSelect
+    (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))) <$>
+      select (Left <$> u)
+       ((select (Left <$> v)
+                ((fmap law3_g ∘ fmap[→_] (fmap[Either _] rev_f_ap) ∘
+                       law3_g ∘ fmap rev_f_ap) <$> w))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ now repeat rewrite <- free_theorem_3_MkSelect ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select (Left <$> v)
+                ((fmap law3_g ∘ fmap[→_] (fmap[Either _] rev_f_ap) ∘
+                       law3_g ∘ fmap rev_f_ap) <$> w))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ now functor_laws ⟩
+  (MkSelect
+    (select (Left <$> u)
+       ((select ((fmap law3_g) <$> (Left <$> v))
+                ((fmap law3_g) <$>
+                 ((fmap[→_] (fmap[Either _] rev_f_ap) ∘ law3_g ∘ fmap rev_f_ap) <$> w)))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ now setoid_rewrite <- free_theorem_1 ⟩
+  (MkSelect
+    (select (Left <$> u)
+       (law3_g <$>
+          (select (Left <$> v)
+                  (((fmap[→_] (fmap[Either _] rev_f_ap) ∘ law3_g ∘ fmap rev_f_ap) <$> w)))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ now functor_laws ⟩
+  (MkSelect
+    (select (Left <$> u)
+       (law3_g <$>
+          (select ((fmap[Either (A -> X)] (fmap[Either _] (@rev_f_ap X C))) <$> (Left <$> v))
+                  (fmap[Select F] (fmap[→_] (fmap[Either _] rev_f_ap))
+                      (fmap[ Select F] (law3_g ∘ fmap rev_f_ap) w)))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ now setoid_rewrite <- free_theorem_1 ⟩
+  (MkSelect
+    (select (Left <$> u)
+       (law3_g <$>
+          ((fmap[Either _] rev_f_ap) <$>
+             (select (Left <$> v)
+                (fmap[ Select F] (law3_g ∘ fmap rev_f_ap) w)))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ unfold law3_f; now (repeat setoid_rewrite <- (Either_fmap_left_cancel _ _ _ Right)) ⟩
+  (MkSelect
+    (select (fmap[ Select F] (law3_f ∘ Left) u)
+       (law3_g <$>
+          ((fmap[Either _] rev_f_ap) <$>
+             (select (fmap[ Select F] (law3_f ∘ Left) v)
+                (fmap[ Select F] (law3_g ∘ fmap rev_f_ap) w)))))
+    ((law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)
+  ).
+  ≡⟨ functor_laws ⟩
+  (MkSelect
+    (select (fmap[ Select F] law3_f (Left <$> u))
+       (law3_g <$>
+          ((fmap[Either _] rev_f_ap) <$>
+             (select (fmap[ Select F] (law3_f ∘ Left) v)
+                (fmap[ Select F] (law3_g ∘ fmap rev_f_ap) w)))))
+    (law3_h <$>
+       ((fmap[→_] rev_f_ap) <$>
+          (fmap (law3_h ∘ (fmap[→_] rev_f_ap)) f)))).
+  ≡⟨ simpl; now simp Select_select ⟩
+   (select (Left <$> u)
+           (MkSelect ((fmap[Either _] rev_f_ap) <$>
+                        (select ((law3_f ∘ Left) <$> v)
+                                ((law3_g ∘ fmap[Either _] rev_f_ap) <$> w)))
+                     ((fmap[→_] rev_f_ap) <$> ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f))
+           )
+   ).
+  ≡⟨ reflexivity ⟩
+   (select (Left <$> u)
+           (rev_f_ap <$> (MkSelect (select ((law3_f ∘ Left) <$> v)
+                                           ((law3_g ∘ fmap[Either _] rev_f_ap) <$> w))
+                                   ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (MkSelect (select ((law3_f ∘ Left) <$> v)
+                            ((law3_g ∘ fmap[Either _] rev_f_ap) <$> w))
+                    ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f))).
+  ≡⟨ functor_laws ⟩
+   (u <*> (MkSelect (select (fmap[Select F] law3_f (Left <$> v))
+                            (fmap[Select F] law3_g ((fmap[Either _] rev_f_ap) <$> w)))
+                    (fmap[F] law3_h ((fmap[→_] rev_f_ap) <$> f)))).
+  ≡⟨ simpl; now simp Select_select ⟩
+   (u <*> (select (Left <$> v)
+                  (MkSelect ((fmap[Either _] rev_f_ap) <$> w)
+                            ((fmap[→_] rev_f_ap) <$> f)))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (select (Left <$> v) (rev_f_ap <$> MkSelect w f))).
+  ≡⟨ reflexivity ⟩
+   (u <*> (v <*> MkSelect w f)).
+
+
+
+End Select_ApplicativeLaws_Proofs.
+
+Global Program Instance Select_ApplicativeLaws `{FunctorLaws F} :
+  ApplicativeLaws (Select F).
+Obligation 1.
+(** (fun x : Select F a => pure id <*> x = id *)
+extensionality x.
+`Begin
+  (Select_ap (Pure (@id a)) x).
+≡⟨ reflexivity ⟩
+ (pure (@id a) <*> x).
+≡⟨ now rewrite (@Select_ap_fmap F H H0)  ⟩
+  (fmap id x).
+≡⟨ now rewrite fmap_id ⟩
+ (id x)
+`End.
+Qed.
+Obligation 2.
+Admitted.
+Obligation 4.
+apply (@Select_ApplicativeLaws_interchange _ _ _).
+Qed.
+Obligation 5.
+(** pure f <*> x = f <$> x *)
+Proof.
+extensionality x. apply (@Select_ap_fmap _ _ _).
+Qed.
+
+(***************************************************************)
+Definition Select_pure_left :
+  forall (A B : Type)
+    (F: Type -> Type)
+    `{FunctorLaws F}
+    (x : A) (y : Select F (A -> B)),
+  pure (Left x) <*? y = rev_f_ap x <$> y.
+Proof.
+  intros A B F HF HFL x y.
+  `Begin
+    (pure (Left x) <*? y).
+  ≡⟨ reflexivity ⟩
+    (pure (Left x) <*? id y).
+  ≡⟨ now rewrite <- fmap_id ⟩
+    (pure (Left x) <*? (id <$> y)).
+  ≡⟨ now setoid_rewrite free_theorem_3 ⟩
+    ((mapLeft (flip id) <$> pure (Left x)) <*? (rev_f_ap <$> y)).
+  ≡⟨ reflexivity ⟩
+    ((pure (Left (fun k => k x))) <*? (rev_f_ap <$> y)).
+  ≡⟨ now rewrite <- ap_homo ⟩
+    ((Left <$> pure (fun k => k x)) <*? (rev_f_ap <$> y)).
+  ≡⟨ reflexivity ⟩
+    (pure (rev_f_ap x) <*> y).
+  ≡⟨ now rewrite ap_fmap ⟩
+    (rev_f_ap x <$> y)
+  `End.
+Qed.
+
+(****************************************************************************************)
