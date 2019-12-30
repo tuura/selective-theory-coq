@@ -33,7 +33,6 @@ Global Instance Env_Functor (A : Type) : Functor (Env A) := {
   fmap := fun A B f g => f ∘ g
 }.
 
-
 Module FunctorLaws.
 
 (* Functors preserve extensional equality for the applied function. *)
@@ -72,5 +71,18 @@ Proof.
     reflexivity.
   reflexivity.
 Qed.
+
+Ltac functor_laws :=
+  repeat
+    match goal with
+    | [ |- context[fmap[?F] id] ] =>
+      rewrite fmap_id
+    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
+      rewrite fmap_comp_x
+    | [ |- context[fmap[?F] id] ] =>
+      setoid_rewrite fmap_id
+    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
+      setoid_rewrite fmap_comp_x
+    end; auto.
 
 End FunctorLaws.

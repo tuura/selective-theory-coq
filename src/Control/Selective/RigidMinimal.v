@@ -397,19 +397,6 @@ Proof.
   f_equal.
 Qed.
 
-Ltac functor_laws :=
-  repeat
-    match goal with
-    | [ |- context[fmap[?F] id] ] =>
-      rewrite fmap_id
-    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
-      rewrite fmap_comp_x
-    | [ |- context[fmap[?F] id] ] =>
-      setoid_rewrite fmap_id
-    | [ |- context[fmap[?F] _ (fmap[?F] _ _)] ] =>
-      setoid_rewrite fmap_comp_x
-    end; auto.
-
 Lemma mapLeft_drag_into_left : forall (A B X: Type) (F : Type -> Type) (H : Functor F)
                                  (f : A -> B) (x : F A),
     (mapLeft f ∘ (@Left A X)) <$> x = (Left ∘ f) <$> x.
@@ -420,6 +407,60 @@ Theorem comp_assoc : forall {A B C D} (f : C -> D) (g : B -> C) (h : A -> B),
 Proof. reflexivity. Qed.
 
 Hint Resolve comp_assoc.
+
+Local Tactic Notation "⟨ " ident(i) " ← " constr(expr) " ⟩ " :=
+  eset (i := expr) in *.
+
+Lemma ap_comp_boring_details :
+  forall (A B X C : Type)
+    (w : Select F (B + A)) (v : Select F (A -> X)) (u : Select F (X -> C))
+    z'' (Heqz'' : z'' =
+           flip
+             (fmap[ → ((A -> X) -> B + A -> B * (A -> C) + C)]
+                (flip
+                   (fmap[ → (B + A -> B * (A -> C) + C)]
+                      (mapLeft (flip (law3_h \o fmap[ → (B)] rev_f_ap))) \o rev_f_ap)) \o
+              rev_f_ap) \o
+           (fun (f : X -> C) (g : A -> X) => Either_bimap (flip pair (f \o g)) (f \o g)))
+    t (Heqt : t =
+         (fun y : B + A =>
+          fmap[ → (A -> X)]
+            (fmap[ → (X -> C)]
+               (mapLeft
+                  (flip
+                     (((law3_h \o fmap[ → (B * (A -> X))] rev_f_ap) \o law3_h) \o
+                      fmap[ → (B)] rev_f_ap))))
+            ((((fmap[ → (A -> X)] law3_g \o
+                fmap[ → (A -> X)] (fmap[ Either (B * (A -> X))] rev_f_ap)) \o law3_g) \o
+              fmap[ Either B] rev_f_ap) y))),
+      fmap comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v <*> w =
+      fmap z'' u <*> v <*> w.
+Proof.
+  intros A B X C w v u z'' Heqz'' t Heqt.
+    f_equal.
+  `Begin
+  (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v).
+  ≡⟨ reflexivity ⟩
+  (select (Left <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)))
+          (rev_f_ap <$> (fmap[ Select F] (flip t) v))).
+  ≡⟨ functor_laws ⟩
+  (select (Left <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)))
+          ((rev_f_ap ∘ flip t) <$> v)).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+  (select (mapLeft (flip (rev_f_ap ∘ flip t)) <$>
+           (Left <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u))))
+          (rev_f_ap <$> v)).
+  ≡⟨ functor_laws ⟩
+  (select (Left <$> ((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u))
+          (rev_f_ap <$> v)).
+  ≡⟨ reflexivity ⟩
+  (((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u) <*> v).
+  f_equal.
+  f_equal.
+  rewrite Heqz'', Heqt. clear Heqz'' z'' Heqt t.
+  extensionalize.
+Qed.
+
 
 Theorem Select_ApplicativeLaws_composition :
   forall (A B C : Type)
@@ -519,7 +560,7 @@ Proof.
                        (fmap comp u <*> v))
                      (rev_f_ap <$> w))
              ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
-  remember (flip (law3_g ∘ (fmap rev_f_ap))) as z.
+  set (z := (flip (law3_g ∘ (fmap rev_f_ap)))) in *.
   ≡⟨ functor_laws ⟩
    (MkSelect (select (Left <$> (z <$> (fmap comp u <*> v)))
                      (rev_f_ap <$> w))
@@ -576,14 +617,14 @@ Proof.
              ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
   assert ((((flip (fmap[→_] z ∘ rev_f_ap)) ∘ comp) <$> u) =
           ((fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) <$> u)) as H.
-  { f_equal. rewrite Heqz. extensionalize. }
-  ≡⟨ now rewrite H ⟩
+  { f_equal. extensionalize. }
+  ≡⟨ now rewrite H; clear H ⟩
    (MkSelect (select (Left <$> (select (Left <$>
                                ((fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) <$> u))
                                        (rev_f_ap <$> v)))
                      (rev_f_ap <$> w))
              ((law3_h ∘ (fmap[→_] rev_f_ap)) <$> f)).
-  clear H Heqz z. remember (fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g)) as z'.
+  subst z. set (z' := (fun f g => Either_bimap ((flip pair) (f ∘ g)) (f ∘ g))) in *.
   ≡⟨ now rewrite <- free_theorem_3_MkSelect ⟩
    (MkSelect ((mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap)))) <$>
               (select (Left <$> (select (Left <$> (z' <$> u))
@@ -599,7 +640,7 @@ Proof.
                       ((fmap[→_] (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) <$>
                        (rev_f_ap <$> w))))
              (rev_f_ap <$> f)).
-  remember (fmap[→_] (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) as p.
+  set (p := fmap[→_] (mapLeft (flip (law3_h ∘ (fmap[→_] rev_f_ap))))) in *.
   ≡⟨ functor_laws ⟩
    (MkSelect (select (Left <$> (select (Left <$> (z' <$> u))
                                          (rev_f_ap <$> v))
@@ -678,90 +719,24 @@ Proof.
                      (rev_f_ap <$> w)
              )
              (rev_f_ap <$> f)).
-  remember ((flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap)) ∘ z') as z''.
-  rewrite Heqz' in Heqz''. clear Heqz' z'.
+  remember (flip (fmap[→_] (flip (p ∘ rev_f_ap)) ∘ rev_f_ap) ∘ z') as z''.
+  subst z'. subst p.
   ≡⟨ reflexivity ⟩
    (MkSelect (((z'' <$> u) <*> v) <*> w)
              (rev_f_ap <$> f)).
-  ≡⟨ admit ⟩
-  (MkSelect
-    (select (Left <$> u)
-       ((select (Left <$> v)
-                ((fun y =>
-            fmap[→_]
-              (fmap[→_]
-                 (mapLeft
-                    (flip
-                       (((law3_h ∘ fmap[→_] rev_f_ap) ∘ law3_h) ∘ fmap[→_] rev_f_ap))))
-              ((((fmap[→_] law3_g ∘ fmap[→_] (fmap rev_f_ap)) ∘ law3_g) ∘
-                  fmap[ Either B] rev_f_ap) y)) <$> w))))
-    (rev_f_ap <$> f)).
   remember ((fun y =>
             fmap[→_]
               (fmap[→_]
                  (mapLeft
                     (flip
-                       (((law3_h ∘ fmap[→_] rev_f_ap) ∘ law3_h) ∘ fmap[→_] rev_f_ap))))
-              ((((fmap[→_] law3_g ∘ fmap[→_] (fmap rev_f_ap)) ∘ law3_g) ∘
-                  fmap[ Either B] rev_f_ap) y))) as t.
-  ≡⟨ admit ⟩
-   (MkSelect (((z'' <$> u) <*> v) <*> w)
-             (rev_f_ap <$> f)).
-  ≡⟨ f_equal ⟩
+                       (((law3_h ∘ fmap[→_] (@rev_f_ap X C)) ∘ law3_h) ∘ fmap[→_] rev_f_ap))))
+              ((((fmap[→_] law3_g ∘ fmap[→_] (fmap (@rev_f_ap X C))) ∘ law3_g) ∘
+                  fmap[ Either B] (@rev_f_ap A X)) y))) as t.
+  ≡⟨ now setoid_rewrite <- ap_comp_boring_details ⟩
   (MkSelect
     (fmap comp (rev_f_ap <$> u) <*> (flip t <$> v) <*> w)
     (rev_f_ap <$> f)
   ).
-  (* admit. *)
-  (* f_equal. *)
-  (* `Begin *)
-  (* (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v). *)
-  (* ≡⟨ reflexivity ⟩ *)
-  (* (select (Left <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u))) *)
-  (*         (rev_f_ap <$> (fmap[ Select F] (flip t) v))). *)
-  (* ≡⟨ admit ⟩ *)
-  (* (select (Left <$> (flip (rev_f_ap ∘ flip t) <$> (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)))) *)
-  (*         (rev_f_ap <$> v)). *)
-  (* ≡⟨ admit ⟩ *)
-  (* (select (Left <$> ((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u)) *)
-  (*         (rev_f_ap <$> v)). *)
-  (* ≡⟨ admit ⟩ *)
-  (* (((flip (rev_f_ap ∘ flip t) ∘ comp ∘ rev_f_ap) <$> u) <*> v). *)
-  (* f_equal. *)
-  (* f_equal. *)
-  (* rewrite Heqt. rewrite Heqz''. rewrite Heqp. *)
-  (* extensionalize. *)
-  (* ≡⟨ admit ⟩ *)
-  (* (fmap[ Select F] t (fmap[ Select F] comp (fmap[ Select F] rev_f_ap u)) <*>  v). *)
-
-
-  (* (MkSelect *)
-  (*   (select (Left <$> u) *)
-  (*      ((select (Left <$> v) *)
-  (*               (t <$> w)))) *)
-  (*   (rev_f_ap <$> f)). *)
-  (* ≡⟨ admit ⟩ *)
-  (*  (MkSelect (mapLeft (flip ((law3_h ∘ (fmap[→_] rev_f_ap)))) <$> (fmap z' u <*> v <*> w)) *)
-  (*            (rev_f_ap <$> f)). *)
-  (* ≡⟨ f_equal ⟩ *)
-  (* (MkSelect *)
-  (*   (fmap comp (rev_f_ap <$> u) <*> (flip t <$> v) <*> w) *)
-  (*   (rev_f_ap <$> f) *)
-  (* ). *)
-  (* admit. *)
-
-  (* symmetry. *)
-  (* rewrite fmap_comp_x. *)
-
-  (* `Begin *)
-  (* (((mapLeft (flip (law3_h ∘ fmap[→_] rev_f_ap)))fmap[ Select F] z' u <*> v <*> w)). *)
-  (* ≡⟨ admit ⟩ *)
-  (* (fmap[ Select F] (mapLeft (flip (law3_h \o fmap[ → (B)] rev_f_ap))) *)
-  (*      (fmap[ Select F] z' u <*> v <*> w)). *)
-  (* `Begin *)
-  (* ((fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v) <*> w). *)
-  (* ≡⟨ admit ⟩ *)
-  (* ((fmap[ Select F] comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v) <*> w). *)
   ≡⟨ now rewrite IHw ⟩
   (MkSelect
     ((rev_f_ap <$> u) <*> ((flip t <$> v) <*> w))
@@ -773,7 +748,25 @@ Proof.
             (rev_f_ap <$> ((flip t <$> v) <*> w)))
     (rev_f_ap <$> f)
   ).
-  ≡⟨ admit ⟩
+  ≡⟨ functor_laws ⟩
+  (MkSelect
+    (select (mapLeft rev_f_ap <$> (Left <$> u))
+            (rev_f_ap <$> ((flip t <$> v) <*> w)))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ trivial ⟩
+  (MkSelect
+    (select (mapLeft (flip id) <$> (Left <$> u))
+            (rev_f_ap <$> ((flip t <$> v) <*> w)))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ now setoid_rewrite <- free_theorem_3 ⟩
+  (MkSelect
+    (select (Left <$> u)
+            (id <$> ((flip t <$> v) <*> w)))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ functor_laws ⟩
   (MkSelect
     (select (Left <$> u)
             ((flip t <$> v) <*> w))
@@ -800,16 +793,26 @@ Proof.
                 (t <$> w))))
     (rev_f_ap <$> f)
   ).
-  ≡⟨ admit ⟩
+  ≡⟨ functor_laws; now setoid_rewrite <- Heqt ⟩
   (MkSelect
-    (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))) <$>
-      select (Left <$> u)
+    (select ((Left <$> u))
        ((select (Left <$> v)
+                (((fmap[→_] (fmap[→_] (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))))) <$> ((fmap law3_g ∘ fmap[→_] (fmap[Either _] rev_f_ap) ∘
+                       law3_g ∘ fmap rev_f_ap) <$> w)))))))
+    (rev_f_ap <$> f)
+  ).
+  ≡⟨ now setoid_rewrite <- (free_theorem_1_left _ _ _ (Select F)
+      Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws) _ v) ⟩
+  (MkSelect
+    (select ((Left <$> u))
+       ((fmap[→_] (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))))) <$>
+         (select (Left <$> v)
                 ((fmap law3_g ∘ fmap[→_] (fmap[Either _] rev_f_ap) ∘
                        law3_g ∘ fmap rev_f_ap) <$> w))))
     (rev_f_ap <$> f)
   ).
-  ≡⟨ admit ⟩
+  ≡⟨ now rewrite <- (free_theorem_1_left _ _ _ (Select F)
+      Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws)) ⟩
   (MkSelect
     (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))) <$>
       select (Left <$> u)
@@ -907,8 +910,9 @@ Proof.
   ≡⟨ reflexivity ⟩
    (u <*> (select (Left <$> v) (rev_f_ap <$> MkSelect w f))).
   ≡⟨ reflexivity ⟩
-   (u <*> (v <*> MkSelect w f)).
-
+   (u <*> (v <*> MkSelect w f))
+  `End.
+Qed.
 
 
 End Select_ApplicativeLaws_Proofs.
@@ -929,7 +933,8 @@ extensionality x.
 `End.
 Qed.
 Obligation 2.
-Admitted.
+apply (Select_ApplicativeLaws_composition _ _ _).
+Qed.
 Obligation 4.
 apply (@Select_ApplicativeLaws_interchange _ _ _).
 Qed.

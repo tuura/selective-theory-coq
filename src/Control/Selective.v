@@ -42,12 +42,34 @@ Definition selectA `{Applicative f} {A B : Type}
 
 Module SelectiveParametricity.
 
+Import FunctorLaws.
+
 Theorem free_theorem_1 :
   forall (A B C : Type) `{Selective F} (f : B -> C) (x : F (A + B)%type) (y : F (A -> B)),
     f <$> (select x y) =
     select (fmap[Either A] f <$> x)
            (fmap[Env A] f <$> y).
 Admitted.
+
+(* The following lemma is a specialisation of the first free theorem *)
+(* in the case when the first argument of select is 'Left' *)
+(* Many implicit arguments must be provided explicitly in order for the *)
+(* lemma to typecheck properly *)
+Corollary free_theorem_1_left :
+  forall (X A C : Type) (F : Type -> Type)
+    (H : Selective F) (FL : FunctorLaws F)
+    (f : X -> C)
+    (x : F A)
+    (y : F (A -> X)),
+    @fmap F _ _ _ f (@select F H _ _ (@Left A X <$> x) y) =
+    @select F H _ _ ((@Left A C) <$[F]> x)
+            ((fmap[Env A] f) <$[F]> y).
+Proof.
+  intros X A C F H HFL f x y.
+  rewrite free_theorem_1.
+  rewrite fmap_comp_x.
+  f_equal.
+Qed.
 
 Theorem free_theorem_2 `{Selective F} :
   forall (A B C : Type) (f : A -> C) (x : F (A + B)%type) (y : F (C -> B)),
@@ -62,6 +84,7 @@ Theorem free_theorem_3 `{Selective F} :
                    (y : F C),
     x <*? (f <$> y) = (mapLeft (flip f) <$> x) <*? ((@rev_f_ap _ _) <$> y).
 Admitted.
+
 
 Ltac apply_free_theorems :=
   repeat
