@@ -1,5 +1,6 @@
 Require Import Hask.Control.Iso.
 Require Import Hask.Prelude.
+Require Import Reasoning.
 Require Import Data.Functor.
 Require Import Data.Either.
 Require Import Control.Applicative.
@@ -10,185 +11,18 @@ Require Import Equations.Equations.
 Require Import Coq.Logic.FunctionalExtensionality.
 Require Import Coq.Setoids.Setoid.
 Require Import Coq.Classes.Morphisms.
+Require Import Hask.Control.Selective.Rigid.
+Require Import Hask.Control.Selective.Rigid.Parametricity.
+Require Import Hask.Control.Selective.Rigid.FunctorLaws.
 
 Set Universe Polymorphism.
 Generalizable All Variables.
 
-Inductive Select (F : Type -> Type) (A : Type) :=
-    Pure   : A -> Select F A
-  | MkSelect : forall B, Select F (B + A) -> F (B -> A) -> Select F A.
-
-Arguments Pure {F} {A}.
-Arguments MkSelect {F} {A} {B}.
-
-Equations Select_map {A B : Type} `{Functor F}
-           (f : A -> B) (x : Select F A) : Select F B :=
-Select_map f (Pure a)       => Pure (f a);
-Select_map f (MkSelect x y) => MkSelect (Select_map (fmap f) x)
-                                        (fmap (fun k : _ -> A => f \o k) y).
-
-Equations Select_depth {A : Type} {F : Type -> Type}
-         (x : Select F A) : nat :=
-Select_depth (Pure a)       := O;
-Select_depth (MkSelect y _) := S (Select_depth y).
-
-Instance Select_Functor {F : Type -> Type} {_ : Functor F} : Functor (Select F) := {
-  fmap := fun _ _ f x => Select_map f x
-}.
-
-Lemma Select_fmap_preserves_depth {A B : Type} `{Functor F} :
-  forall (x : Select F A) (f : A -> B),
-  Select_depth (Select_map f x) = Select_depth x.
-Proof.
-  intros x.
-  revert B.
-  induction x as [| A b s IH handler]; trivial; simpl in *; intros f1 B.
-  - repeat rewrite Select_map_equation_2. simp Select_depth. now rewrite IH.
-Qed.
-
+Section Select_ApplicativeLaws_Proofs.
 
 Import FunctorLaws.
-
-Program Instance Select_FunctorLaws `{FunctorLaws F} : FunctorLaws (Select F).
-(*   forall (x : Select F A), fmap id x = id x. *)
-Obligation 1.
-unfold id.
-extensionality x.
-generalize dependent x.
-generalize dependent a.
-induction x; trivial.
-rewrite Select_map_equation_2.
-assert (forall A, (fun x0 : A => x0) = id) as H_subst_id.
-{ reflexivity. }
-f_equal; repeat rewrite H_subst_id in *; rewrite fmap_id.
-- now rewrite IHx.
-- now unfold id.
-Qed.
-(*   fmap f ∘ fmap g = fmap (f ∘ g). *)
-Obligation 2.
-extensionality x.
-simpl.
-revert b c f g.
-induction x.
-- trivial.
-- intros b c f0 g.
-  repeat rewrite Select_map_equation_2.
-  f_equal.
-  + rewrite <- fmap_comp. now rewrite IHx.
-  + unfold "∘". now rewrite fmap_comp_x.
-Qed.
-
-Definition law3_f {A B C : Type}
-           (x : B + C) : B + (A + C) := Right <$> x.
-
-Lemma law3_f_cancel :
-  forall (A B C : Type),
-  (@law3_f A _ _) ∘ (@Left B C) = Left.
-Proof. intros. extensionality x. now simpl. Qed.
-
-Definition law3_g {A B C : Type}
-           (y : A + (B -> C)) : B -> A * B + C :=
-  fun a => Either_bimap (fun p => pair p a) (fun f => f a) y.
-
-Definition law3_h  {A B C : Type}
-           (f : A -> B -> C) : A * B -> C := uncurry f.
-
-Equations Select_select {A B : Type} {F : Type -> Type} {HF : Functor F}
-          (x : Select F (A + B)) (handler : Select F (A -> B))
-  : (Select F B) by wf (Select_depth handler) lt :=
-Select_select x (Pure y) := fmap[Select F] (either y id) x;
-Select_select x (MkSelect y z) :=
-  MkSelect (Select_select (fmap[Select F] law3_f x) (fmap[Select F] law3_g y))
-           (fmap[F] law3_h z).
-Obligation 1.
-simpl.
-rewrite Select_fmap_preserves_depth.
-rewrite Select_depth_equation_2.
-omega.
-Defined.
-
-Definition Select_ap {A B : Type} `{Functor F}
-           (f : Select F (A -> B)) (x : Select F A) : Select F B :=
-  Select_select (Left <$> f) (rev_f_ap <$> x).
-
-Lemma Select_ap_unfold  {A B : Type} `{Functor F}
-           {f : Select F (A -> B)} {x : Select F A} :
-  Select_ap f x = Select_select (Left <$> f) (rev_f_ap <$> x).
-Proof. now reflexivity. Qed.
-
-(***************************************************************)
-Global Instance Select_Applicative `{Functor F} : Applicative (Select F) := {
-  pure _ x := Pure x;
-  ap _ _ f x  := Select_ap f x
-}.
-
 Import ApplicativeLaws.
-
 Import SelectiveParametricity.
-
-Theorem free_theorem_1_MkSelect :
-  forall (A B C : Type) `{Functor F} (f : B -> C)
-         (x : Select F (A + B)%type)
-         (y : F (A -> B)),
-    f <$> (MkSelect x y) =
-    MkSelect (fmap[Either A] f <$> x)
-             (fmap[Env A] f <$> y).
-Proof.
-  intros. simpl fmap. reflexivity.
-Qed.
-
-Theorem free_theorem_2_MkSelect `{Functor F} :
-  forall (A B C : Type) (f : A -> C) (x : Select F (A + B)) (y : F (C -> B)),
-    MkSelect (mapLeft f <$> x) y = MkSelect x (fmap (fun g : C -> B => g \o f) y).
-Admitted.
-
-Theorem free_theorem_3_MkSelect `{Functor F} :
-  forall (A B C : Type) (f : C -> A -> B)
-                   (x : Select F (A + B))
-                   (y : F C),
-    MkSelect x (f <$> y) = MkSelect (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
-Proof.
-Admitted.
-
-Global Instance Select_Selective `{Functor F} : Selective (Select F) := {
-  select _ _ x f := Select_select x f
-}.
-
-Lemma Select_select_to_infix :
-  forall (A B : Type) `{Functor F}
-  (x : Select F (A + B)%type) (y : Select F (A -> B)),
-  Select_select x y = x <*? y.
-Proof. reflexivity. Qed.
-
-Lemma Select_fmap_unfold :
-  forall (A B : Type) `{Functor F}
-  (x : Select F A) (f : A -> B),
-  fmap f x = Select_map f x.
-Proof. reflexivity. Qed.
-
-Ltac pretty_fmaps := repeat (try rewrite <- Select_fmap_unfold).
-
-Ltac pretty_selects :=
-  repeat rewrite Select_select_to_infix.
-
-Lemma fold_compose :
-  forall A B C (f : B -> C) (g : A -> B), Basics.compose f g = f ∘ g.
-  trivial. Qed.
-
-Local Notation "→ B" := (Env B) (at level 0).
-
-Local Tactic Notation
-  "`Begin " constr(lhs) := idtac.
-
-Local Tactic Notation
-  "≡⟨ " tactic(proof) "⟩" constr(lhs) :=
-  (stepl lhs by proof).
-
-Local Tactic Notation
-  "≡⟨ " tactic(proof) "⟩" constr(lhs) "`End" :=
-  (now stepl lhs by proof).
-
-Section Select_ApplicativeLaws_Proofs.
 
 Context (F : Type -> Type).
 Context (FFunctor : Functor F).
@@ -405,11 +239,6 @@ Proof. intros. f_equal. Qed.
 Theorem comp_assoc : forall {A B C D} (f : C -> D) (g : B -> C) (h : A -> B),
       f ∘ (g ∘ h) = (f ∘ g) ∘ h.
 Proof. reflexivity. Qed.
-
-Hint Resolve comp_assoc.
-
-Local Tactic Notation "⟨ " ident(i) " ← " constr(expr) " ⟩ " :=
-  eset (i := expr) in *.
 
 Lemma ap_comp_boring_details :
   forall (A B X C : Type)
@@ -914,11 +743,12 @@ Proof.
   `End.
 Qed.
 
-
 End Select_ApplicativeLaws_Proofs.
 
-Global Program Instance Select_ApplicativeLaws `{FunctorLaws F} :
-  ApplicativeLaws (Select F).
+
+Global Program Instance Select_ApplicativeLaws (F : Type -> Type)
+       (HF : Functor F) (HFL : FunctorLaws.FunctorLaws F) :
+  (@ApplicativeLaws.ApplicativeLaws (Select F) (@Select_Applicative F H)).
 Obligation 1.
 (** (fun x : Select F a => pure id <*> x = id *)
 extensionality x.
@@ -943,33 +773,3 @@ Obligation 5.
 Proof.
 extensionality x. apply (@Select_ap_fmap _ _ _).
 Qed.
-
-(***************************************************************)
-Definition Select_pure_left :
-  forall (A B : Type)
-    (F: Type -> Type)
-    `{FunctorLaws F}
-    (x : A) (y : Select F (A -> B)),
-  pure (Left x) <*? y = rev_f_ap x <$> y.
-Proof.
-  intros A B F HF HFL x y.
-  `Begin
-    (pure (Left x) <*? y).
-  ≡⟨ reflexivity ⟩
-    (pure (Left x) <*? id y).
-  ≡⟨ now rewrite <- fmap_id ⟩
-    (pure (Left x) <*? (id <$> y)).
-  ≡⟨ now setoid_rewrite free_theorem_3 ⟩
-    ((mapLeft (flip id) <$> pure (Left x)) <*? (rev_f_ap <$> y)).
-  ≡⟨ reflexivity ⟩
-    ((pure (Left (fun k => k x))) <*? (rev_f_ap <$> y)).
-  ≡⟨ now rewrite <- ap_homo ⟩
-    ((Left <$> pure (fun k => k x)) <*? (rev_f_ap <$> y)).
-  ≡⟨ reflexivity ⟩
-    (pure (rev_f_ap x) <*> y).
-  ≡⟨ now rewrite ap_fmap ⟩
-    (rev_f_ap x <$> y)
-  `End.
-Qed.
-
-(****************************************************************************************)
