@@ -70,17 +70,17 @@ Proof. reflexivity. Qed.
 
 Module ApplicativeLaws.
 
-Include FunctorLaws.
+Import FunctorLaws.
 
-Class ApplicativeLaws (f : Type -> Type) `{Applicative f} := {
-  has_functor_laws :> FunctorLaws f;
+Class ApplicativeLaws (F : Type -> Type) {FIsApplicative : Applicative F} := {
+  has_functor_laws :> FunctorLaws F;
 
   ap_id : forall a : Type, ap (pure (@id a)) = id;
-  ap_comp : forall (a b c : Type) (v : f (a -> b)) (u : f (b -> c)) (w : f a),
+  ap_comp : forall (a b c : Type) (v : F (a -> b)) (u : F (b -> c)) (w : F a),
     pure (fun f g x => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w);
   ap_homo : forall (a b : Type) (x : a) (f : a -> b),
     pure f <*> pure x = pure (f x);
-  ap_interchange : forall (a b : Type) (y : a) (u : f (a -> b)),
+  ap_interchange : forall (a b : Type) (y : a) (u : F (a -> b)),
     u <*> pure y = pure (fun f => f y) <*> u;
 
   ap_fmap : forall (a b : Type) (f : a -> b),

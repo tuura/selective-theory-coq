@@ -15,7 +15,7 @@ Require Import Hask.Control.Selective.Rigid.
 Set Universe Polymorphism.
 Generalizable All Variables.
 
-Import SelectiveParametricity.
+Import Selective.SelectiveParametricity.
 
 Theorem free_theorem_1_MkSelect :
   forall (A B C : Type) `{Functor F} (f : B -> C)

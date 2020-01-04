@@ -12,7 +12,7 @@ src/Control/Selective.v
 src/Data/Over.v
 src/Data/Under.v
 src/Control/Selective/Rigid.v
-src/Control/Selective/Rigid/FunctorLaws.v
 src/Control/Selective/Rigid/Parametricity.v
-src/Control/Selective/Rigid/ApplicativeLaws.v
-src/Control/Selective/Rigid/SelectiveLaws.v
+src/Control/Selective/Rigid/Proofs/Functor.v
+src/Control/Selective/Rigid/Proofs/Applicative.v
+src/Control/Selective/Rigid/Proofs/Selective.v
