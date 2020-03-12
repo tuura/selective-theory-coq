@@ -1,6 +1,7 @@
--R src/ Hask -arg -impredicative-set
+-R src/ Hask
+-arg -w -arg -notation-overridden
+-arg -impredicative-set
 src/Prelude.v
-src/Ltac.v
 src/Data/Functor.v
 src/Data/Functor/Contravariant.v
 src/Reasoning.v
