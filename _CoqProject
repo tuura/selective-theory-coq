@@ -17,3 +17,4 @@ src/Control/Selective/Rigid/Parametricity.v
 src/Control/Selective/Rigid/Proofs/Functor.v
 src/Control/Selective/Rigid/Proofs/Applicative.v
 src/Control/Selective/Rigid/Proofs/Selective.v
+src/Control/Monad.v
