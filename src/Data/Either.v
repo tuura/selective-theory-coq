@@ -10,6 +10,7 @@ Inductive Either (A B : Set) : Set :=
 Arguments Left {_} {_}.
 Arguments Right {_} {_}.
 
+Global Close Scope nat_scope.
 Notation "x + y" := (Either x y) : type_scope.
 
 Definition either {A B C : Set} (f : A -> C) (g : B -> C) (x : A + B) : C :=

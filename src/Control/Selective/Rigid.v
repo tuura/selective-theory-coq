@@ -33,7 +33,7 @@ Section WithF.
   Select_depth (MkSelect y _) := S (Select_depth y).
 
   Lemma Select_depth_pure :
-    forall (A : Set) (x : Select F A) (H : Select_depth x = 0), (exists a, x = Pure a).
+    forall (A : Set) (x : Select F A) (H : Select_depth x = O), (exists a, x = Pure a).
   Proof.
     intros.
     destruct x.

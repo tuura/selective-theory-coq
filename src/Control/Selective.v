@@ -141,7 +141,7 @@ Definition law3_h  {A B C : Set}
            | pair x y => f x y
            end.
 
-Class SelectiveLaws (F : Set -> Set) (HS : Selective F) := {
+Class SelectiveLaws (F : Set -> Set) {HS : Selective F} := {
   has_applicative_laws :> ApplicativeLaws F;
 
   select_identity : forall (A : Set) (x : F (A + A)%type),
