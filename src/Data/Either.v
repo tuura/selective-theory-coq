@@ -1,19 +1,9 @@
-Generalizable All Variables.
-Set Primitive Projections.
-Set Universe Polymorphism.
-Unset Transparent Obligations.
-
-Require Import Hask.Control.Iso.
 Require Import Hask.Prelude.
 Require Import Data.Functor.
 Require Import Control.Applicative.
 Require Import FunctionalExtensionality.
 
-(* Notation Either := sum (only parsing). *)
-(* Notation Left   := inl (only parsing). *)
-(* Notation Right  := inr (only parsing). *)
-
-Inductive Either (A B : Type) : Type :=
+Inductive Either (A B : Set) : Set :=
     Left  : A -> Either A B
   | Right : B -> Either A B.
 
@@ -22,28 +12,18 @@ Arguments Right {_} {_}.
 
 Notation "x + y" := (Either x y) : type_scope.
 
-Definition isLeft  `(x : a + b) : bool := if x then true else false.
-Definition isRight `(x : a + b) : bool := if x then false else true.
-
-Definition either `(f : a -> c) `(g : b -> c) (x : a + b) : c :=
+Definition either {A B C : Set} (f : A -> C) (g : B -> C) (x : A + B) : C :=
   match x with
   | Left a => f a
   | Right b => g b
   end.
 
-Definition mapLeft {A B C : Type} (f : A -> C) (x : A + B) : C + B :=
+Definition mapLeft {A B C : Set} (f : A -> C) (x : A + B) : C + B :=
   match x with
   | Left l => Left (f l)
   | Right r => Right r
   end.
 
-(* Definition mapLeft `(f : a -> c) `(x : a + b) : c + b := *)
-(*   match x with *)
-(*   | Left l => Left (f l) *)
-(*   | Right r => Right r *)
-(*   end. *)
-
-Require Import FunctionalExtensionality.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 
@@ -54,27 +34,27 @@ Proof.
   intros. f_equal. extensionality a. intuition.
 Qed.
 
-Definition mapRight {E X Y} (f : X -> Y) (x : Either E X) : Either E Y :=
+Definition mapRight {E X Y : Set} (f : X -> Y) (x : Either E X) : Either E Y :=
   match x with
   | Left e   => Left e
   | Right x' => Right (f x')
   end.
 
-Add Parametric Morphism {A B C} : (fun f => @mapRight A C B f)
+Add Parametric Morphism {A B C : Set} : (fun f => @mapRight A C B f)
   with signature (pointwise_relation _ eq ==> eq ==> eq)
     as mapRight_isomorphism.
 Proof.
   intros. f_equal. extensionality a. intuition.
 Qed.
 
-Definition Either_bimap {A B X Y} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
+Definition Either_bimap {A B X Y : Set} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
   match x with
   | Left a  => Left (f a)
   | Right x => Right (g x)
   end.
 
 Lemma Either_bimap_id :
-  forall A B,
+  forall (A B : Set),
     Either_bimap (@id A) (@id B) = id.
 Proof.
   intros A B.
@@ -82,7 +62,7 @@ Proof.
   destruct x; trivial.
 Qed.
 
-Definition Either_ap {E X Y} (f : Either E (X -> Y)) (x : Either E X)
+Definition Either_ap {E X Y : Set} (f : Either E (X -> Y)) (x : Either E X)
   : Either E Y :=
   match f with
   | Left e   => Left e
@@ -92,20 +72,20 @@ Definition Either_ap {E X Y} (f : Either E (X -> Y)) (x : Either E X)
     end
   end.
 
-Definition Either_join {E X} (x : Either E (Either E X)) : Either E X :=
+Definition Either_join {E X : Set} (x : Either E (Either E X)) : Either E X :=
   match x with
   | Left e           => Left e
   | Right (Left e)   => Left e
   | Right (Right x') => Right x'
   end.
 
-Instance Either_Functor {E} : Functor (Either E) :=
+Instance Either_Functor {E : Set} : Functor (Either E) :=
 { fmap := @mapRight E
 }.
 
 Import FunctorLaws.
 
-Program Instance Either_FunctorLaws {E} : FunctorLaws (Either E).
+Program Instance Either_FunctorLaws {E : Set} : FunctorLaws (Either E).
 Obligation 1.
 extensionality x. now destruct x.
 Defined.
@@ -114,12 +94,12 @@ extensionality x. now destruct x.
 Defined.
 
 Lemma Either_fmap_left_cancel :
-  forall (A B C : Type) (f : B -> C),
+  forall (A B C : Set) (f : B -> C),
   fmap[Either A] f ∘ Left = Left.
 Proof. intros. extensionality x. now simpl. Qed.
 
 Lemma Either_bimap_fmap_fuse :
-  forall (A B C D X : Type)
+  forall (A B C D X : Set)
          (f : B -> C) (g : B -> D) (h : X -> B),
   Either_bimap f g ∘ mapRight h = Either_bimap f (g ∘ h).
 Proof.
@@ -129,7 +109,7 @@ Proof.
 Qed.
 
 Lemma Either_bimap_fmap_fuse_x :
-  forall (A B C D X : Type)
+  forall (A B C D X : Set)
          (f : B -> C) (g : B -> D) (h : X -> B) x,
   Either_bimap f g (mapRight h x) = Either_bimap f (g ∘ h) x.
 Proof.
@@ -138,7 +118,7 @@ Proof.
 Qed.
 
 Lemma Either_bimap_mapLeft_fuse :
-  forall (A B C D X : Type)
+  forall (A B C D X : Set)
          (f : B -> C) (g : B -> D) (h : C -> X),
   mapLeft h ∘ Either_bimap f g = Either_bimap (h ∘ f) g.
 Proof.
@@ -148,7 +128,7 @@ Proof.
 Qed.
 
 Lemma Either_bimap_mapLeft_fuse_x :
-  forall (A B C D X : Type)
+  forall (A B C D X : Set)
          (f : B -> C) (g : B -> D) (h : C -> X) x,
   mapLeft h (Either_bimap f g x) = Either_bimap (h ∘ f) g x.
 Proof.
@@ -157,7 +137,7 @@ Proof.
 Qed.
 
 Lemma Either_map_to_fmap :
-  forall (A B C : Type)
+  forall (A B C : Set)
          (f : B -> C),
     @mapRight A B C f = fmap f.
 Proof. now simpl fmap. Qed.

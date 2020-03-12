@@ -1,4 +1,3 @@
-Require Import Coq.Program.Basics.
 Require Import Hask.Prelude.
 Require Import Data.Either.
 Require Import Data.Monoid.
@@ -13,11 +12,9 @@ Require Import FunctionalExtensionality.
 Require Import Omega.
 From Equations Require Import Equations.
 
-Generalizable All Variables.
-
-Inductive Select (F : Type -> Type) (A : Type) :=
+Inductive Select (F : Set -> Set) (A : Set) : Set :=
     Pure   : A -> Select F A
-  | MkSelect : forall X, Select F ((X -> A) + A) -> F X -> Select F A.
+  | MkSelect : forall X : Set, Select F ((X -> A) + A) -> F X -> Select F A.
 
 Arguments Pure {F} {A}.
 Arguments MkSelect {F} {A} {X}.
@@ -25,53 +22,53 @@ Arguments MkSelect {F} {A} {X}.
 (******************************************************************************)
 (************************ Functor and FunctorLaws *****************************)
 (******************************************************************************)
-Equations Select_map {A B : Type} {F : Type -> Type}
+Equations(noind) Select_map {A B : Set} {F : Set -> Set}
            (f : A -> B) (x : Select F A) : Select F B :=
 Select_map f (Pure a) => Pure (f a);
 Select_map f (MkSelect x y) =>
-  MkSelect (Select_map (Either_bimap (fun k : _ -> A => f \o k) f) x) y.
+  MkSelect (Select_map (Either_bimap (fun k : _ -> A => f ∘ k) f) x) y.
 
-Program Instance Select_Functor (F : Type -> Type) : Functor (Select F) := {
+Instance Select_Functor (F : Set -> Set) : Functor (Select F) := {
   fmap := fun _ _ f x => Select_map f x
 }.
 
 Import FunctorLaws.
 
 Program Instance Select_FunctorLaws : FunctorLaws (Select F).
-(* Theorem Select_Functor_law1 {A : Type} *)
+(* Theorem Select_Functor_law1 {A : Set} *)
 (*         `{Functor F} `{FunctorLaws F} : *)
 (*   forall (x : Select F A), fmap id x = id x. *)
 Obligation 1.
 unfold id.
 extensionality x.
 generalize dependent x.
-generalize dependent a.
+generalize dependent A.
 induction x; simpl in *; trivial.
 rewrite Select_map_equation_2.
 f_equal.
-assert (forall A, (fun x0 : A => x0) = id).
+assert (forall (A : Set), (fun x0 : A => x0) = id).
 { reflexivity. }
-repeat rewrite H1 in *.
+repeat rewrite H in *.
 rewrite Either_bimap_id.
 now rewrite IHx.
 Qed.
-(* Theorem Select_Functor_law2 {A B C : Type} *)
+(* Theorem Select_Functor_law2 {A B C : Set} *)
 (*         `{Functor F} `{FunctorLaws F} : *)
 (*   forall (f : B -> C) (g : A -> B) (x : Select F A), *)
 (*   ((Select_map f) \o (Select_map g)) x = Select_map (f \o g) x. *)
 Obligation 2.
 extensionality x.
 simpl.
-revert b c f g.
+revert B C f g.
 induction x.
 - trivial.
 - intros b c f0 g.
   repeat rewrite Select_map_equation_2.
   f_equal.
-  remember (Either_bimap (fun k : X -> b => f0 \o k) f0) as p.
-  remember (Either_bimap (fun k : X -> A => g \o k) g) as q.
-  remember (Either_bimap (fun k : X -> A => (f0 \o g) \o k) (f0 \o g)) as r.
-  assert (p \o q = r).
+  remember (Either_bimap (fun k : X -> b => f0 ∘ k) f0) as p.
+  remember (Either_bimap (fun k : X -> A => g ∘ k) g) as q.
+  remember (Either_bimap (fun k : X -> A => (f0 ∘ g) ∘ k) (f0 ∘ g)) as r.
+  assert (p ∘ q = r).
   { extensionality y.
     simpl. rewrite Heqp. rewrite Heqq. rewrite Heqr.
     destruct y; trivial.
@@ -81,41 +78,41 @@ induction x.
 Qed.
 
 (* This is a helper function used in the Select_selectBy definition *)
-Definition g {A B C D E : Type}
+Definition g {A B C D E : Set}
            (f : A -> ((B -> C) + C))
            (a : A) :
   (((D -> B) + B) -> ((D -> C) + C)) + (E + C) :=
   match f a with
-  | inr r => Right (Right r)
-  | inl l => Left  (Either_bimap (comp l) l)
+  | Right r => Right (Right r)
+  | Left l => Left  (Either_bimap (comp l) l)
   end.
 
-Equations Select_selectBy {A B C : Type} {F : Type -> Type}
+Equations(noind) Select_selectBy {A B C : Set} {F : Set -> Set}
           (f : A -> ((B -> C) + C))
           (x : Select F A)
           (a : Select F B) : Select F C :=
-Select_selectBy f x (Pure y)       := (either (rev_f_ap y) id \o f) <$> x;
+Select_selectBy f x (Pure y)       := (either (rev_f_ap y) id ∘ f) <$> x;
 Select_selectBy f x (MkSelect y z) := MkSelect (Select_selectBy (g f) x y) z.
 
-Definition Select_select {A B : Type} {F : Type -> Type}
+Definition Select_select {A B : Set} {F : Set -> Set}
            (x : Select F (A + B))
            (handler : Select F (A -> B)) : Select F B :=
   Select_selectBy (mapLeft rev_f_ap) x handler.
 
 
-Definition Select_ap {A B : Type} {F : Type -> Type}
+Definition Select_ap {A B : Set} {F : Set -> Set}
            (f : Select F (A -> B)) (x : Select F A) : Select F B :=
   Select_select (Left <$> f) (rev_f_ap <$> x).
 
 Program Instance Select_Applicative
-        (F : Type -> Type) : Applicative (Select F) :=
+        (F : Set -> Set) : Applicative (Select F) :=
   { is_functor := Select_Functor F
   ; pure _ x := Pure x
   ; ap _ _ f x := Select_ap f x
 }.
 
 Program Instance Select_Selective
-        (F : Type -> Type) : Selective (Select F) :=
+        (F : Set -> Set) : Selective (Select F) :=
   { is_applicative := Select_Applicative F
   ; select _ _ x f := Select_select x f
 }.
@@ -137,8 +134,8 @@ Admitted.
 (* -- F1 (Free): f <$> select x y = select (fmap f <$> x) (fmap f <$> y) *)
 (* f1 :: Selective f => (b -> c) -> f (Either a b) -> f (a -> b) -> f c *)
 (* f1 f x y = f <$> select x y === select (fmap f <$> x) (fmap f <$> y) *)
-Theorem Select_free_1 {F : Type -> Type} :
-  forall (A B C : Type) (f : B -> C) (x : Select F (A + B)) (y : Select F (A -> B)),
+Theorem Select_free_1 {F : Set -> Set} :
+  forall (A B C : Set) (f : B -> C) (x : Select F (A + B)) (y : Select F (A -> B)),
     f <$> select x y = select (fmap f <$> x)
                               ((fun g : A -> B => f \o g) <$> y).
 Admitted.
@@ -146,29 +143,29 @@ Admitted.
 (* -- F2 (Free): select (first f <$> x) y = select x ((. f) <$> y) *)
 (* f2 :: Selective f => (a -> c) -> f (Either a b) -> f (c -> b) -> f b *)
 (* f2 f x y = select (first f <$> x) y === select x ((. f) <$> y) *)
-Theorem Select_free_2 {F : Type -> Type} :
-  forall (A B C : Type) (f : A -> C) (x : Select F (A + B)) (y : Select F (C -> B)),
+Theorem Select_free_2 {F : Set -> Set} :
+  forall (A B C : Set) (f : A -> C) (x : Select F (A + B)) (y : Select F (C -> B)),
     select (mapLeft f <$> x) y = select x ((fun g : C -> B => g \o f) <$> y).
 Admitted.
 
 (* -- F3 (Free): select x (f <$> y) = select (first (flip f) <$> x) (flip ($) <$> y) *)
 (* f3 :: Selective f => (c -> a -> b) -> f (Either a b) -> f c -> f b *)
 (* f3 f x y = select x (f <$> y) === select (first (flip f) <$> x) (flip ($) <$> y) *)
-Theorem Select_free_3 {F : Type -> Type} :
-  forall (A B C : Type) (f : C -> A -> B)
+Theorem Select_free_3 {F : Set -> Set} :
+  forall (A B C : Set) (f : C -> A -> B)
                         (x : Select F (A + B))
                         (y : Select F C),
     select x (f <$> y) = select (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
 Admitted.
 
 Lemma Select_select_to_infix :
-  forall (A B : Type) (F : Type -> Type)
+  forall (A B : Set) (F : Set -> Set)
   (x : Select F (A + B)%type) (y : Select F (A -> B)),
   Select_select x y = x <*? y.
 Proof. reflexivity. Qed.
 
 Lemma Select_map_to_fmap :
-  forall (A B : Type) (F : Type -> Type)
+  forall (A B : Set) (F : Set -> Set)
   (x : Select F A) (f : A -> B),
   Select_map f x = fmap f x.
 Proof. reflexivity. Qed.
@@ -176,8 +173,8 @@ Proof. reflexivity. Qed.
 (* p2 :: Selective f => a -> f (a -> b) -> f b *)
 (* p2 x y = select (pure (Left  x)) y === y <*> pure x *)
 (* This theorem can be proved for any rigid selective functor, i.e. if apS = (<*>) *)
-Theorem Select_pure_left {F : Type -> Type} :
-  forall (A B : Type) (x : A) (y : Select F (A -> B)),
+Theorem Select_pure_left {F : Set -> Set} :
+  forall (A B : Set) (x : A) (y : Select F (A -> B)),
     select (pure (Left x)) y = (rev_f_ap x) <$> y.
 Proof.
   intros A B x y.
@@ -202,7 +199,7 @@ Proof.
           pure inl <*> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y).
   { now rewrite ap_homo. }
   rewrite H. clear H.
-  (* Use ap_fmap to rewrite `pure inl <*>` as `inl <$>` *) 
+  (* Use ap_fmap to rewrite `pure inl <*>` as `inl <$>` *)
   assert (pure inl <*> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y =
           inl <$> Pure (fun x0 : A -> B => x0 x) <*? fmap[ Select F] rev_f_ap y).
   { now rewrite ap_fmap. }
@@ -231,8 +228,8 @@ Proof.
 Qed.
 
 (* -- P1id (Identity): select x (pure id) == either id id <$> x *)
-Theorem Select_Selective_law1 {F : Type -> Type} :
-  forall (A B : Type) (x : Select F (A + B)) (y : A -> B),
+Theorem Select_Selective_law1 {F : Set -> Set} :
+  forall (A B : Set) (x : Select F (A + B)) (y : A -> B),
     select x (Pure y) = either y id <$> x.
 Proof.
   intros A B x y.
@@ -245,21 +242,21 @@ Proof.
   destruct x0; trivial.
 Qed.
 
-Definition law3_f {A B C : Type}
+Definition law3_f {A B C : Set}
            (x : B + C) : B + (A + C) := Right <$> x.
 
-Definition law3_g {A B C : Type}
+Definition law3_g {A B C : Set}
            (y : A + (B -> C)) : B -> A * B + C :=
   fun a => Either_bimap (fun p => pair p a) (rev_f_ap a) y.
 
-Definition law3_h  {A B C : Type}
+Definition law3_h  {A B C : Set}
            (z : A -> B -> C) : A * B -> C := uncurry z.
 
 Require Import Coq.Program.Equality.
 Require Import Coq.Bool.Bool.
 
 Lemma Select_law3_case_x_pure_left:
-  forall (A B C : Type) (F : Type -> Type) (x : B)
+  forall (A B C : Set) (F : Set -> Set) (x : B)
     (y : Select F (A + (B -> C))) (z : Select F (A -> B -> C)),
     Pure (Left x) <*? (y <*? z) =
     (law3_f <$> (Pure (Left x))) <*? (law3_g <$> y) <*? (law3_h <$> z).
@@ -280,13 +277,13 @@ Proof.
   f_equal.
   rewrite fmap_comp_x.
   rewrite fmap_comp_x.
-  (* Drop the outher fmap *) 
+  (* Drop the outher fmap *)
   f_equal.
   extensionality y0. destruct y0; trivial.
 Qed.
 
 Lemma Select_law3_case_x_pure_right:
-  forall (A B C : Type) (F : Type -> Type) (x : C)
+  forall (A B C : Set) (F : Set -> Set) (x : C)
     (y : Select F (A + (B -> C))) (z : Select F (A -> B -> C)),
     Pure (Right x) <*? (y <*? z) =
     (law3_f <$> (Pure (Right x))) <*? (law3_g <$> y) <*? (law3_h <$> z).
@@ -313,7 +310,7 @@ Proof.
   remember ( Pure (inr (inr x)) <*? fmap[ Select F] law3_g y) as p.
   rewrite Select_free_3 in Heqp.
   remember (fmap[ Select F] (mapLeft (flip law3_g)) (Pure (inr (inr x)))) as q.
-  simpl fmap in Heqq. simp Select_map in Heqq. simpl mapLeft in Heqq.  
+  simpl fmap in Heqq. simp Select_map in Heqq. simpl mapLeft in Heqq.
   rewrite Heqrhs. clear Heqrhs rhs Heqp p Heqq q.
   dependent induction z.
   - remember (fmap[ Select F] rev_f_ap (Pure a)) as q.
@@ -369,7 +366,7 @@ Proof.
 Admitted.
 
 Theorem Select_Selective_law3_assoc :
-  forall (A B C : Type) (F : Type -> Type)
+  forall (A B C : Set) (F : Set -> Set)
   (x : Select F (B + C))
   (y : Select F (A + (B -> C)))
   (z : Select F (A -> B -> C)),
@@ -389,8 +386,8 @@ Admitted.
 
 (* This is a proof of the (Pure Right) case of the distributivity theorem for rigid
    selective functors. Assumes the associativity law. *)
-Lemma Select_Selective_law2_case_right {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
-  forall (A B : Type) (x : B) (y : Select F (A -> B)) (z : Select F (A -> B)),
+Lemma Select_Selective_law2_case_right {F : Set -> Set} {H: ApplicativeLaws (Select F)} :
+  forall (A B : Set) (x : B) (y : Select F (A -> B)) (z : Select F (A -> B)),
     select (Pure (Right x)) (y *> z) = (select (Pure (Right x)) y) *> (select (Pure (Right x)) z).
 Proof.
   intros A B x y z.
@@ -430,7 +427,7 @@ Proof.
              (fun y : A + B =>
               fmap[ sum A]
                 (fun y0 : (B -> B) + B => either (law3_g (inr (rev_f_ap x))) id (law3_f y0))
-                (fmap[ sum A] (fun y0 : B => inl (const id y0)) y)) 
+                (fmap[ sum A] (fun y0 : B => inl (const id y0)) y))
              (Pure (inr x))) as p.
   compute in Heqp. simp Select_map in Heqp. rewrite Heqp in Heqrhs. clear Heqp p.
   remember (fmap[ Select F] law3_f (Pure (inr x))) as p.
@@ -470,8 +467,8 @@ Qed.
 (* d1 :: Selective f => Either a b -> f (a -> b) -> f (a -> b) -> f b *)
 (* NB:  This law appers to be a 'theorem' if we only consider rigid selective functos. *)
 (* NB2: The following proof assumes 'pure-left' and the associativity law (law 3) *)
-Theorem Select_Selective_law2 {F : Type -> Type} {H: ApplicativeLaws (Select F)} :
-  forall (A B : Type) (x : A + B) (y : Select F (A -> B)) (z : Select F (A -> B)),
+Theorem Select_Selective_law2 {F : Set -> Set} {H: ApplicativeLaws (Select F)} :
+  forall (A B : Set) (x : A + B) (y : Select F (A -> B)) (z : Select F (A -> B)),
     select (Pure x) (y *> z) = (select (Pure x) y) *> (select (Pure x) z).
 Proof.
   intros A B x y z.
@@ -549,8 +546,8 @@ Proof.
 Qed.
 
 (* To prove applicative laws we, again, must (?) assume pure-left *)
-Theorem Select_Applicative_law1 {F : Type -> Type} :
-  forall (A : Type),
+Theorem Select_Applicative_law1 {F : Set -> Set} :
+  forall (A : Set),
   Select_ap (F:=F) (Pure (@id A)) = @id (Select F A).
 Proof.
   intros A.
@@ -559,7 +556,7 @@ Proof.
   simpl fmap.
   rewrite Select_map_equation_1.
   remember (Select_pure_left (F:=F)) as H_pure_left.
-  simpl select in H_pure_left. 
+  simpl select in H_pure_left.
   rewrite H_pure_left.
   assert (Select_map (fun (x0 : A) (f : A -> A) => f x0) x =
           fmap[ Select F] (fun (x0 : A) (f : A -> A) => f x0) x).

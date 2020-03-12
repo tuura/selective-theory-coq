@@ -1,11 +1,11 @@
--R src/ Hask
+-R src/ Hask -arg -impredicative-set
 src/Prelude.v
 src/Ltac.v
 src/Data/Functor.v
+src/Data/Functor/Contravariant.v
 src/Reasoning.v
 src/Data/Functor/Const.v
 src/Control/Applicative.v
-src/Control/Iso.v
 src/Data/Either.v
 src/Data/Monoid.v
 src/Control/Selective.v

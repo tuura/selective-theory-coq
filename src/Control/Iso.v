@@ -1,6 +1,5 @@
 (* Due to John Wiegley: https://raw.githubusercontent.com/jwiegley/coq-haskell/master/src/Control/Iso.v*)
 
-Require Import Hask.Ltac.
 Require Import Hask.Prelude.
 Require Import Hask.Control.Applicative.
 (* Require Import Hask.Control.Monad. *)
@@ -21,7 +20,7 @@ Set Primitive Projections.
 Set Universe Polymorphism.
 Unset Transparent Obligations.
 
-(** Type Constants *)
+(** Set Constants *)
 
 Definition zero := False.
 Definition one  := unit.
@@ -60,12 +59,12 @@ Ltac extensionalize :=
 
 Infix "∘" := comp (at level 50).
 
-Definition isomorphic (X Y : Type) : Prop :=
+Definition isomorphic (X Y : Set) : Prop :=
   exists (f : X -> Y) (g : Y -> X), f ∘ g = id /\ g ∘ f = id.
 
 Notation "X ≅ Y" := (isomorphic X Y) (at level 100).
 
-Axiom iso_ext : forall {A : Type} (f g : A -> Type),
+Axiom iso_ext : forall {A : Set} (f g : A -> Set),
   (forall x, f x ≅ g x) -> ((forall x, f x) ≅ (forall x, g x)).
 
 Program Instance Iso_Equivalence : Equivalence isomorphic.
@@ -92,7 +91,7 @@ Obligation 3.
   * rewrite H4, H0. trivial.
 Qed.
 
-Add Parametric Relation {A B : Type} : Type isomorphic
+Add Parametric Relation {A B : Set} : Set isomorphic
   reflexivity proved by (@Equivalence_Reflexive _ _ Iso_Equivalence)
   symmetry proved by (@Equivalence_Symmetric _ _ Iso_Equivalence)
   transitivity proved by (@Equivalence_Transitive _ _ Iso_Equivalence)
@@ -146,7 +145,7 @@ Proof.
   reflexivity.
 Qed.
 
-Class Isomorphism (X Y : Type) := {
+Class Isomorphism (X Y : Set) := {
   to       : X -> Y;
   from     : Y -> X;
   iso_to   : to ∘ from = id;
@@ -164,7 +163,7 @@ Qed.
 
 (** Adjoint Functors *)
 
-Definition adjoint (f g : Type -> Type) : Prop :=
+Definition adjoint (f g : Set -> Set) : Prop :=
   forall a b, f a -> b ≅ a -> g b.
 
 Notation "F ⊣ G" := (adjoint F G) (at level 100).
@@ -187,7 +186,7 @@ Notation "F ⊣ G" := (adjoint F G) (at level 100).
 
 (** Representable Functors *)
 
-(* Definition representable (f : Type -> Type) : Prop := *)
+(* Definition representable (f : Set -> Set) : Prop := *)
 (*   forall a, exists R, R -> a ≅ f a. *)
 
 (** Sums (coproducts, type addition) *)
@@ -490,7 +489,7 @@ Hint Rewrite exp_zero_iso : isos.
 (* (* (c^a)^b = (c^b)^a *) *)
 (* Proof. intros; do 2 exists Basics.flip; intuition. Qed. *)
 
-Lemma exp_exp_sym_dep_iso : forall (a c : Type) (d : c -> Type),
+Lemma exp_exp_sym_dep_iso : forall (a c : Set) (d : c -> Set),
   (a -> forall b : c, d b) ≅ (forall b : c, a -> d b).
 Proof.
   intuition.
@@ -554,7 +553,7 @@ Qed.
 (* Qed. *)
 (* Hint Rewrite exp_sig_iso : isos. *)
 
-(* Lemma exp_sigT_iso : forall A (P : A -> Type) r, *)
+(* Lemma exp_sigT_iso : forall A (P : A -> Set) r, *)
 (*   { x : A & P x } -> r ≅ (forall x : A, P x -> r). *)
 (* Proof. *)
 (*   intros. *)
@@ -589,7 +588,7 @@ Qed.
 
 (** Multiplication by a constant *)
 
-Fixpoint mul (n : nat) (a : Type) : Type :=
+Fixpoint mul (n : nat) (a : Set) : Set :=
   match n with
   | O    => zero
   | S O  => a
@@ -639,7 +638,7 @@ Hint Rewrite plus_Sn_m : isos.
 
 (** Exponentation by a constant *)
 
-Fixpoint exp (n : nat) (a : Type) : Type :=
+Fixpoint exp (n : nat) (a : Set) : Set :=
   match n with
   | O    => one
   | S O  => a
@@ -731,7 +730,7 @@ Proof.
   exact (a0, IHl).
 Defined.
 
-Theorem list_exp_iso : forall a : Type, { n : nat & exp n a } ≅ list a.
+Theorem list_exp_iso : forall a : Set, { n : nat & exp n a } ≅ list a.
 Proof.
   intros.
   exists (fun p : { n : nat & exp n a } =>
@@ -748,7 +747,7 @@ Abort.
 
 (** Identity *)
 
-(* Theorem identity_iso : forall (A : Type), Identity A ≅ A. *)
+(* Theorem identity_iso : forall (A : Set), Identity A ≅ A. *)
 (* Proof. reflexivity. Qed. *)
 (* Hint Rewrite identity_iso : Isos. *)
 
@@ -780,11 +779,11 @@ Abort.
 (* (* Given a pair (y -> a, f y), and a function g : y -> x, then the pair *)
 (*     (id, fmap g c) is informationally equivalent to the pair (g, c). *) *)
 (* Axiom Coyoneda_parametricity : forall `{Functor f} x y (g : y -> x) (c : f y), *)
-(*   EqdepFacts.eq_dep Type (fun r : Type => ((r -> x) * f r)%type) *)
+(*   EqdepFacts.eq_dep Set (fun r : Set => ((r -> x) * f r)%type) *)
 (*     x (id, fmap g c) y (g, c). *)
 
 (* Lemma Coyoneda_iso : forall `{FunctorLaws f} x, *)
-(*   { r : Type & ((r -> x) * f r)%type } ≅ f x. *)
+(*   { r : Set & ((r -> x) * f r)%type } ≅ f x. *)
 (* Proof. *)
 (*   intros. *)
 (*   exists (fun p => match p with existT e (x, H) => fmap x H end). *)
@@ -810,11 +809,11 @@ Abort.
 
 (* (** Reader *) *)
 
-(* Definition Reader (e : Type) (a : Type) := e -> a. *)
+(* Definition Reader (e : Set) (a : Set) := e -> a. *)
 
 (* (** Codensity *) *)
 
-(* Definition Codensity m a := forall r : Type, (a -> m r) -> m r. *)
+(* Definition Codensity m a := forall r : Set, (a -> m r) -> m r. *)
 
 (* Theorem Codensity_Reader_State_iso : forall e a, *)
 (*   Codensity (Reader e) a ≅ State e a. *)
@@ -850,16 +849,16 @@ Abort.
 (*   apply iso_ext; intros. *)
 (*   rewrite exp_exp_sym_dep_iso. *)
 (*   unfold isomorphic. *)
-(*   exists (fun (k : (forall x0 : Type, (x0 -> x) -> a + f x0 -> x) -> x) *)
-(*               (g : forall x0 : Type, (x0 -> x) -> f x0 -> x) *)
+(*   exists (fun (k : (forall x0 : Set, (x0 -> x) -> a + f x0 -> x) -> x) *)
+(*               (g : forall x0 : Set, (x0 -> x) -> f x0 -> x) *)
 (*               (h : a -> x) => *)
 (*             k (fun x j p => *)
 (*                  match p with *)
 (*                  | inl a => h a *)
 (*                  | inr f => g x j f *)
 (*                  end)). *)
-(*   exists (fun (k : (forall x0 : Type, (x0 -> x) -> f x0 -> x) -> (a -> x) -> x) *)
-(*               (g : forall x0 : Type, (x0 -> x) -> a + f x0 -> x) => *)
+(*   exists (fun (k : (forall x0 : Set, (x0 -> x) -> f x0 -> x) -> (a -> x) -> x) *)
+(*               (g : forall x0 : Set, (x0 -> x) -> a + f x0 -> x) => *)
 (*             k (fun x j f => g x j (inr f)) *)
 (*               (fun a => g False (False_rect _) (inl a))). *)
 (*   extensionalize. *)
@@ -876,7 +875,7 @@ Abort.
 (* Proof. *)
 (*   intros. *)
 (*   exists *)
-(*     (fun (k : forall r : Type, (forall x, (x -> r) -> a + f x -> r) -> r) => *)
+(*     (fun (k : forall r : Set, (forall x, (x -> r) -> a + f x -> r) -> r) => *)
 (*        k (Free f a) *)
 (*          (fun _ h p => *)
 (*             match p return Free f a with *)
@@ -884,7 +883,7 @@ Abort.
 (*             | inr x => Join h x *)
 (*             end)). *)
 (*   (* exists *) *)
-(*   (*   (fun p r (k : forall x : Type, (x -> r) -> a + f x -> r) => *) *)
+(*   (*   (fun p r (k : forall x : Set, (x -> r) -> a + f x -> r) => *) *)
 (*   (*      let fix go (p : Free f a) {struct p} : r := *) *)
 (*   (*          match p return r with *) *)
 (*   (*          | Pure x     => k r id (inl x) *) *)
@@ -921,7 +920,7 @@ Abort.
 (*   reflexivity. *)
 (* Qed. *)
 
-(* Definition Nat (f g : Type -> Type) := forall x : Type, f x -> g x. *)
+(* Definition Nat (f g : Set -> Set) := forall x : Set, f x -> g x. *)
 
 (* Infix "⟹" := Nat (at level 100). *)
 
@@ -935,8 +934,8 @@ Abort.
 (*   pose proof (@Yoneda_iso f H H0 b). *)
 (*   unfold Yoneda in H1. *)
 (*   rewrite <- H1. *)
-(*   assert ((a -> forall r : Type, (b -> r) -> f r) ≅ *)
-(*           (forall r : Type, a -> (b -> r) -> f r)). *)
+(*   assert ((a -> forall r : Set, (b -> r) -> f r) ≅ *)
+(*           (forall r : Set, a -> (b -> r) -> f r)). *)
 (*     exists (fun k r a g => k a r g). *)
 (*     exists (fun k a r g => k r a g). *)
 (*     extensionalize. *)
@@ -958,8 +957,8 @@ Abort.
 (*   reflexivity. *)
 (* Qed. *)
 
-(* Lemma CoYoneda_embedding_iso : forall a b : Type, *)
-(*   (forall x : Type, (a -> x) -> (b -> x)) ≅ (b -> a). *)
+(* Lemma CoYoneda_embedding_iso : forall a b : Set, *)
+(*   (forall x : Set, (a -> x) -> (b -> x)) ≅ (b -> a). *)
 (* Proof. *)
 (*   intros. *)
 (*   rewrite <- (Cont_iso a). *)
@@ -970,16 +969,16 @@ Abort.
 (* Qed. *)
 
 (* Axiom Yoneda_embedding_parametricity : *)
-(*   forall `(k : forall x : Type, (x -> a) -> x -> b) *)
+(*   forall `(k : forall x : Set, (x -> a) -> x -> b) *)
 (*          `(C : x -> a) (x0 : x), *)
 (*   k a id (C x0) = k x C x0. *)
 
-(* Lemma Yoneda_embedding_iso : forall a b : Type, *)
-(*   (forall x : Type, (x -> a) -> (x -> b)) ≅ (a -> b). *)
+(* Lemma Yoneda_embedding_iso : forall a b : Set, *)
+(*   (forall x : Set, (x -> a) -> (x -> b)) ≅ (a -> b). *)
 (* Proof. *)
 (*   intros. *)
 (*   unfold isomorphic. *)
-(*   exists (fun (f : forall x : Type, (x -> a) -> x -> b) => f _ id). *)
+(*   exists (fun (f : forall x : Set, (x -> a) -> x -> b) => f _ id). *)
 (*   exists (fun (f : a -> b) x k x0 => f (k x0)). *)
 (*   extensionalize. *)
 (*   extensionality x0. *)
@@ -1000,7 +999,7 @@ Abort.
 (* Proof. *)
 (* Abort. *)
 
-(* Lemma Lens_pair_iso : forall (s t a b : Type), *)
+(* Lemma Lens_pair_iso : forall (s t a b : Set), *)
 (*   Lens s t a b ≅ (s -> a) * (s -> b -> t). *)
 (* Proof. *)
 (*   intros. *)
@@ -1011,8 +1010,8 @@ Abort.
 (*   simpl in H. *)
 (*   rewrite <- H. *)
 (*   unfold IStore. *)
-(*   assert ((forall f : Type -> Type, Functor f -> (a -> f b) -> s -> f t) *)
-(*           ≅ (s -> forall f : Type -> Type, Functor f -> (a -> f b) -> f t)). *)
+(*   assert ((forall f : Set -> Set, Functor f -> (a -> f b) -> s -> f t) *)
+(*           ≅ (s -> forall f : Set -> Set, Functor f -> (a -> f b) -> f t)). *)
 (*     exists (fun k s f H g => k f H g s). *)
 (*     exists (fun k f H g s => k s f H g). *)
 (*     extensionalize. *)
@@ -1055,14 +1054,14 @@ Abort.
 (* Proof. exact @Coyoneda_iso. Qed. *)
 
 (* Lemma Coyoneda_alg_iso : forall `{FunctorLaws f} x, *)
-(*   (forall r : Type, (r -> x) -> f r -> x) ≅ f x -> x. *)
+(*   (forall r : Set, (r -> x) -> f r -> x) ≅ f x -> x. *)
 (* Proof. *)
 (*   intros. *)
 (*   rewrite <- Lan_alg_iso, Lan_id_f_iso. *)
 (*   reflexivity. *)
 (* Qed. *)
 
-(* Inductive Foo (a b : Type) := *)
+(* Inductive Foo (a b : Set) := *)
 (*   | mkFoo : a -> b -> Foo a b *)
 (*   | mkBar : a -> a -> Foo a b -> Foo a b *)
 (*   | mkBaz : Foo a b. *)
@@ -1084,7 +1083,7 @@ Abort.
 (*   extensionalize. *)
 (* Qed. *)
 
-(* Inductive FooF (a b r : Type) := *)
+(* Inductive FooF (a b r : Set) := *)
 (*   | mkFooF : a -> b -> FooF a b r *)
 (*   | mkBarF : a -> a -> r -> FooF a b r *)
 (*   | mkBazF : FooF a b r. *)
@@ -1094,7 +1093,7 @@ Abort.
 (*   fun r k => k (Fix (FooF a b)) (fun z => z r k) x. *)
 (* *) *)
 
-(* Instance FooF_Functor (a b : Type) : Functor (FooF a b) := { *)
+(* Instance FooF_Functor (a b : Set) : Functor (FooF a b) := { *)
 (*   fmap := fun _ _ f x => *)
 (*             match x with *)
 (*             | mkFooF a b => mkFooF _ _ _ a b *)
@@ -1103,7 +1102,7 @@ Abort.
 (*             end *)
 (* }. *)
 
-(* Program Instance FooF_FunctorLaws (a b : Type) : FunctorLaws (FooF a b). *)
+(* Program Instance FooF_FunctorLaws (a b : Set) : FunctorLaws (FooF a b). *)
 (* Obligation 1. extensionalize. Qed. *)
 (* Obligation 2. extensionalize. Qed. *)
 
@@ -1124,7 +1123,7 @@ Abort.
 (*   extensionalize. *)
 (* Qed. *)
 
-(* Definition Foo_to_FooF (a b : Type) (x : Foo a b) : Fix (FooF a b) := *)
+(* Definition Foo_to_FooF (a b : Set) (x : Foo a b) : Fix (FooF a b) := *)
 (*   fun r k => *)
 (*     k r id (let fix go x := *)
 (*                 match x with *)
@@ -1134,7 +1133,7 @@ Abort.
 (*                 end in *)
 (*             go x). *)
 
-(* Definition FooF_to_Foo (a b : Type) (x : Fix (FooF a b)) : Foo a b := *)
+(* Definition FooF_to_Foo (a b : Set) (x : Fix (FooF a b)) : Foo a b := *)
 (*   x (Foo a b) (fun x k f => *)
 (*                  match fmap[FooF a b] k f with *)
 (*                  | mkFooF a b   => mkFoo _ _ a b *)
@@ -1197,8 +1196,8 @@ Abort.
 (* Proof. *)
 (*   intros. *)
 (*   exists (fun p r k => match p with existT e (h, x) => k e h x end). *)
-(*   exists (fun (k : forall r : Type, *)
-(*                      (forall x : Type, (f x -> a) -> g x -> r) -> r) => *)
+(*   exists (fun (k : forall r : Set, *)
+(*                      (forall x : Set, (f x -> a) -> g x -> r) -> r) => *)
 (*             k (Lan f g a) (fun e h x => existT _ e (h, x))). *)
 (*   extensionalize k r h. *)
 (*   apply (Lan_final_parametricity *)

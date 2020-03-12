@@ -1,4 +1,3 @@
-Require Import Hask.Control.Iso.
 Require Import Hask.Prelude.
 Require Import Reasoning.
 Require Import Data.Functor.
@@ -15,42 +14,39 @@ Require Import Hask.Control.Selective.Rigid.
 Require Import Hask.Control.Selective.Rigid.Parametricity.
 Require Import Hask.Control.Selective.Rigid.Proofs.Functor.
 
-Set Universe Polymorphism.
-Generalizable All Variables.
-
 Section Select_ApplicativeLaws_Proofs.
 
 Import FunctorLaws.
 Import ApplicativeLaws.
-Import SelectiveParametricity.
+(* Import SelectiveParametricity. *)
 
-Context (F : Type -> Type).
+Context (F : Set -> Set).
 Context (FFunctor : Functor F).
 Context (FFunctorLaws : FunctorLaws F).
 
 Lemma boring_details :
-  forall (A B X : Type) (g : A -> X),
+  forall (A B X : Set) (g : A -> X),
   ((Either_bimap (fun (y : B) (h : B -> A) => g (h y)) g) = (
     ((flip ((fmap[→_] ((mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap))))) ∘
       law3_g ∘ fmap[ Either B] rev_f_ap))) g)).
 Proof. intros. extensionality z; now destruct z. Qed.
 
 Lemma boring_details_2:
-      forall (A B : Type)
-        (X : Type) (g : A -> X),
+      forall (A B : Set)
+        (X : Set) (g : A -> X),
           (Either_bimap (fun y h  => g (h y)) g) =
           (flip ((fun g0  => (mapLeft (flip (fun g1 : B -> A => g ∘ g1))) ∘ g0) ∘ rev_f_ap)
                 (mapRight g)).
 Proof. intros A B X g. extensionality x. now destruct x. Qed.
 
 Lemma ap_fmap_selectors_equal :
-  forall (A B : Type) (x : Select F (B + A)) (f : F (B -> A)) (X : Type) (g : A -> X),
+  forall (A B : Set) (x : Select F (B + A)) (f : F (B -> A)) (X : Set) (g : A -> X),
   mapLeft (flip (fmap[→B] g)) <$>
       (select (fmap[ Select F] Left ((pure[ Select F]) (fmap[ Either B] g)))
               (fmap[ Select F] rev_f_ap x)) =
-  mapLeft (flip (law3_h \o fmap[→B] rev_f_ap)) <$>
-      (select (fmap[ Select F] (law3_f \o Left) ((pure[ Select F]) g))
-              (fmap[ Select F] (law3_g \o fmap[ Either B] rev_f_ap) x)).
+  mapLeft (flip (law3_h ∘ fmap[→B] rev_f_ap)) <$>
+      (select (fmap[ Select F] (law3_f ∘ Left) ((pure[ Select F]) g))
+              (fmap[ Select F] (law3_g ∘ fmap[ Either B] rev_f_ap) x)).
 Proof.
   intros A B x f X g.
 `Begin
@@ -121,7 +117,7 @@ Proof.
 Qed.
 
 Theorem Select_ap_fmap :
-  forall (A B : Type) (x : Select F A) (f : A -> B),
+  forall (A B : Set) (x : Select F A) (f : A -> B),
   pure[Select F] f <*> x = fmap f x.
 Proof.
   intros A B x f.
@@ -176,7 +172,7 @@ Proof.
 Qed.
 
 Theorem Select_ApplicativeLaws_interchange :
-  forall (A B : Type) (u : Select F (A -> B)) (y : A),
+  forall (A B : Set) (u : Select F (A -> B)) (y : A),
   u <*> pure y = pure (rev_f_ap y) <*> u.
 Proof.
   intros A B u y.
@@ -195,7 +191,7 @@ Proof.
     ((either (rev_f_ap y) (@id _)) <$> (pure[Select F] (Left f))).
    ≡⟨ reflexivity ⟩
     (pure[Select F] (rev_f_ap y f)).
-   ≡⟨ simpl "<$>"; now rewrite Select_map_equation_1 ⟩
+   ≡⟨ functor_laws ⟩
     (rev_f_ap y <$> (pure[Select F] f)).
    ≡⟨ now rewrite Select_ap_fmap ⟩
     (pure[Select F] (rev_f_ap y) <*> pure f)
@@ -220,9 +216,9 @@ Proof.
 Qed.
 
 Lemma boring_details_3:
-  forall (A : Type) (a : A) (B : Type),
+  forall (A : Set) (a : A) (B : Set),
     Select F (A -> B) ->
-    forall (C : Type) (u : Select F (B -> C)),
+    forall (C : Set) (u : Select F (B -> C)),
       (mapLeft (B := C) (flip (rev_f_ap ∘ rev_f_ap a))) <$> (Left <$> u) =
       (mapLeft (flip (comp (rev_f_ap a) ∘ rev_f_ap))) <$> (Left <$> (comp <$> u)).
 Proof.
@@ -231,36 +227,32 @@ Proof.
   f_equal.
 Qed.
 
-Lemma mapLeft_drag_into_left : forall (A B X: Type) (F : Type -> Type) (H : Functor F)
+Lemma mapLeft_drag_into_left : forall (A B X: Set) (F : Set -> Set) (H : Functor F)
                                  (f : A -> B) (x : F A),
     (mapLeft f ∘ (@Left A X)) <$> x = (Left ∘ f) <$> x.
 Proof. intros. f_equal. Qed.
 
-Theorem comp_assoc : forall {A B C D} (f : C -> D) (g : B -> C) (h : A -> B),
-      f ∘ (g ∘ h) = (f ∘ g) ∘ h.
-Proof. reflexivity. Qed.
-
 Lemma ap_comp_boring_details :
-  forall (A B X C : Type)
+  forall (A B X C : Set)
     (w : Select F (B + A)) (v : Select F (A -> X)) (u : Select F (X -> C))
     z'' (Heqz'' : z'' =
            flip
              (fmap[ → ((A -> X) -> B + A -> B * (A -> C) + C)]
                 (flip
                    (fmap[ → (B + A -> B * (A -> C) + C)]
-                      (mapLeft (flip (law3_h \o fmap[ → (B)] rev_f_ap))) \o rev_f_ap)) \o
-              rev_f_ap) \o
-           (fun (f : X -> C) (g : A -> X) => Either_bimap (flip pair (f \o g)) (f \o g)))
+                      (mapLeft (flip (law3_h ∘ fmap[ → (B)] rev_f_ap))) ∘ rev_f_ap)) ∘
+              rev_f_ap) ∘
+           (fun (f : X -> C) (g : A -> X) => Either_bimap (flip pair (f ∘ g)) (f ∘ g)))
     t (Heqt : t =
          (fun y : B + A =>
           fmap[ → (A -> X)]
             (fmap[ → (X -> C)]
                (mapLeft
                   (flip
-                     (((law3_h \o fmap[ → (B * (A -> X))] rev_f_ap) \o law3_h) \o
+                     (((law3_h ∘ fmap[ → (B * (A -> X))] rev_f_ap) ∘ law3_h) ∘
                       fmap[ → (B)] rev_f_ap))))
-            ((((fmap[ → (A -> X)] law3_g \o
-                fmap[ → (A -> X)] (fmap[ Either (B * (A -> X))] rev_f_ap)) \o law3_g) \o
+            ((((fmap[ → (A -> X)] law3_g ∘
+                fmap[ → (A -> X)] (fmap[ Either (B * (A -> X))] rev_f_ap)) ∘ law3_g) ∘
               fmap[ Either B] rev_f_ap) y))),
       fmap comp (fmap[ Select F] rev_f_ap u) <*> fmap[ Select F] (flip t) v <*> w =
       fmap z'' u <*> v <*> w.
@@ -292,9 +284,9 @@ Qed.
 
 
 Theorem Select_ApplicativeLaws_composition :
-  forall (A B C : Type)
+  forall (A B C : Set)
   (u : Select F (B -> C)) (v : Select F (A -> B)) (w : Select F A),
-  pure[Select F] comp <*> u <*> v <*> w = u <*> (v <*> w).
+  (pure[Select F] comp) <*> u <*> v <*> w = u <*> (v <*> w).
 Proof.
   intros A B C u v w.
   `Begin
@@ -630,8 +622,9 @@ Proof.
                        law3_g ∘ fmap rev_f_ap) <$> w)))))))
     (rev_f_ap <$> f)
   ).
-  ≡⟨ now setoid_rewrite <- (free_theorem_1_left _ _ _ (Select F)
-      Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws) _ v) ⟩
+  ≡⟨ admit ⟩
+  (* ≡⟨ now setoid_rewrite <- (free_theorem_1_left _ _ _ (Select F) *)
+  (*     Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws) _ v) ⟩ *)
   (MkSelect
     (select ((Left <$> u))
        ((fmap[→_] (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))))) <$>
@@ -640,8 +633,9 @@ Proof.
                        law3_g ∘ fmap rev_f_ap) <$> w))))
     (rev_f_ap <$> f)
   ).
-  ≡⟨ now rewrite <- (free_theorem_1_left _ _ _ (Select F)
-      Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws)) ⟩
+  (* ≡⟨ now rewrite <- (free_theorem_1_left _ _ _ (Select F) *)
+  (*     Select_Selective (@Select_FunctorLaws F FFunctor FFunctorLaws)) ⟩ *)
+  ≡⟨ admit ⟩
   (MkSelect
     (mapLeft (flip (law3_h  ∘ (fmap[→_] rev_f_ap) ∘ law3_h ∘ (fmap[→B] rev_f_ap))) <$>
       select (Left <$> u)
@@ -741,7 +735,8 @@ Proof.
   ≡⟨ reflexivity ⟩
    (u <*> (v <*> MkSelect w f))
   `End.
-Qed.
+(* Qed. *)
+Admitted.
 
 End Select_ApplicativeLaws_Proofs.
 
@@ -752,16 +747,16 @@ Import ApplicativeLaws.
 Check Select_FunctorLaws.
 
 
-Global Program Instance Select_ApplicativeLaws (F : Type -> Type)
+Global Program Instance Select_ApplicativeLaws (F : Set -> Set)
        (HF : Functor F) (HFL : FunctorLaws F) :
   ApplicativeLaws (Select F).
   (* (@ApplicativeLaws (Select F) (@Select_Applicative F H)). *)
 Obligation 1.
 extensionality x.
 `Begin
-  (Select_ap (Pure (@id a)) x).
+  (Select_ap (Pure (@id _)) x).
 ≡⟨ reflexivity ⟩
- (pure (@id a) <*> x).
+ (pure (@id _) <*> x).
 ≡⟨ now rewrite Select_ap_fmap ⟩
   (fmap id x).
 ≡⟨ now rewrite fmap_id ⟩
@@ -769,8 +764,9 @@ extensionality x.
 `End.
 Qed.
 Obligation 2.
-apply (Select_ApplicativeLaws_composition _ _ _).
-Qed.
+(* apply (Select_ApplicativeLaws_composition _ _ _). *)
+(* Qed. *)
+Admitted.
 Obligation 4.
 apply (@Select_ApplicativeLaws_interchange _ _ _).
 Qed.

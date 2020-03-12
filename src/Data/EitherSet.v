@@ -21,8 +21,8 @@ Arguments Right {_} {_}.
 Definition EitherFn X Y :=
   forall Z, (X -> Z) -> (Y -> Z) -> Z.
 
-Definition mkLeft {X Y : Type} (x : X) :=
-  fun (Z : Type) (l : X -> Z) (_ : Y -> Z) => l x.
+Definition mkLeft {X Y : Set} (x : X) :=
+  fun (Z : Set) (l : X -> Z) (_ : Y -> Z) => l x.
 
 Compute (mkLeft 1).
 
@@ -32,32 +32,32 @@ Check EitherFn nat nat.
 (* Definition isLeft  `(x : a + b) : bool := if x then true else false. *)
 (* Definition isRight `(x : a + b) : bool := if x then false else true. *)
 
-Definition either {a b c : Type} (f : a -> c) (g : b -> c) (x : a + b) : c :=
+Definition either {a b c : Set} (f : a -> c) (g : b -> c) (x : a + b) : c :=
   match x with
   | Left a => f a
   | Right b => g b
   end.
 
-Definition mapLeft {a b c : Type} (f : a -> c) (x : a + b) : c + b :=
+Definition mapLeft {a b c : Set} (f : a -> c) (x : a + b) : c + b :=
   match x with
   | Left l => Left (f l)
   | Right r => Right r
   end.
 
-Definition mapRight {a b c : Type} (f : b -> c) (x : a + b) : a + c :=
+Definition mapRight {a b c : Set} (f : b -> c) (x : a + b) : a + c :=
   match x with
   | Left l => Left l
   | Right r => Right (f r)
   end.
 
-Definition Either_map {E X Y : Type} (f : X -> Y) (x : Either E X) : Either E Y :=
+Definition Either_map {E X Y : Set} (f : X -> Y) (x : Either E X) : Either E Y :=
   match x with
   | Left e   => Left e
   | Right x' => Right (f x')
   end.
 
 Lemma Either_map_comp_x :
-  forall (E A B C : Type)
+  forall (E A B C : Set)
     (f : B -> C) (g : A -> B) (x : E + A),
     Either_map f (Either_map g x) = Either_map (f \o g) x.
 Proof.
@@ -65,13 +65,13 @@ Proof.
   destruct x; trivial.
 Qed.
 
-(* Lemma id_x_is_x {A : Type}: *)
+(* Lemma id_x_is_x {A : Set}: *)
 (*   forall (x : A), id x = x. *)
 (* Proof. *)
 (*   intros x. reflexivity. *)
 (* Qed. *)
 
-Lemma Either_map_id {E X : Type} :
+Lemma Either_map_id {E X : Set} :
   @Either_map E X X id = id.
 Proof.
   extensionality x.
@@ -79,14 +79,14 @@ Proof.
   reflexivity.
 Qed.
 
-Definition Either_bimap {A B X Y : Type} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
+Definition Either_bimap {A B X Y : Set} (f : A -> B) (g : X -> Y) (x : Either A X) : Either B Y :=
   match x with
   | Left a  => Left (f a)
   | Right x => Right (g x)
   end.
 
 Lemma Either_bimap_id :
-  forall (A B : Type),
+  forall (A B : Set),
     Either_bimap (@id A) (@id B) = id.
 Proof.
   intros A B.
@@ -94,7 +94,7 @@ Proof.
   destruct x; trivial.
 Qed.
 
-Definition Either_ap {E X Y : Type} (f : Either E (X -> Y)) (x : Either E X)
+Definition Either_ap {E X Y : Set} (f : Either E (X -> Y)) (x : Either E X)
   : Either E Y :=
   match f with
   | Left e   => Left e
@@ -104,7 +104,7 @@ Definition Either_ap {E X Y : Type} (f : Either E (X -> Y)) (x : Either E X)
     end
   end.
 
-Definition Either_join {E X : Type} (x : Either E (Either E X)) : Either E X :=
+Definition Either_join {E X : Set} (x : Either E (Either E X)) : Either E X :=
   match x with
   | Left e           => Left e
   | Right (Left e)   => Left e
@@ -126,7 +126,7 @@ extensionality x. now destruct x.
 Defined.
 
 Lemma Either_map_to_fmap :
-  forall (A B C : Type)
+  forall (A B C : Set)
          (f : B -> C),
     @Either_map A B C f = fmap f.
 Proof. now simpl fmap. Qed.

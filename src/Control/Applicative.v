@@ -1,25 +1,22 @@
-Require Export Hask.Ltac.
+Require Export Hask.Prelude.
 Require Export Hask.Data.Functor.
 Require Export Hask.Data.Functor.Const.
 Require Import FunctionalExtensionality.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Setoids.Setoid.
 
-Generalizable All Variables.
-Set Universe Polymorphism.
-
 Reserved Notation "f <*> g" (at level 28, left associativity).
 
-Class Applicative (f : Type -> Type) := {
-  is_functor :> Functor f;
+Class Applicative (F : Set -> Set) := {
+  is_functor :> Functor F;
 
-  pure : forall a : Type, a -> f a;
-  ap   : forall a b : Type, f (a -> b) -> f a -> f b
+  pure : forall a : Set, a -> F a;
+  ap   : forall a b : Set, F (a -> b) -> F a -> F b
     where "f <*> g" := (ap f g)
 }.
 
-Arguments pure {f _ _} _.
-Arguments ap   {f _ _ _} _ x.
+Arguments pure {F _ _} _.
+Arguments ap   {F _ _ _} _ x.
 
 (* Add Parametric Morphism {A} `{Applicative F} : (@pure F _ A) *)
 (*   with signature (pointwise_relation _ eq ==> eq ==> eq) *)
@@ -31,13 +28,22 @@ Arguments ap   {f _ _ _} _ x.
 (*   apply H0. *)
 (* Qed. *)
 
-Lemma pure_ext : forall (A : Type) `(Applicative F) (x y : A),
-    x = y -> pure x = pure y.
-Proof. intros. now rewrite H0. Qed.
+Section WithApplicative.
+  Context {F : Set -> Set}.
+  Context {HA : Applicative F}.
 
-(* Lemma t : forall (A : Type) `{Applicative F} (x y : A), *)
-(*     @pure F _ A x = pure y. *)
-(* Proof. intros. apply pure_ext. *)
+  Lemma pure_ext : forall (A : Set) (x y : A),
+      x = y -> pure x = pure y.
+  Proof. intros. now subst. Qed.
+
+  Definition liftA2 {A B C : Set}
+             (f : A -> B -> C) (x : F A) (y : F B) : F C := ap (fmap f x) y.
+
+  (* Lemma sequence_ap : *)
+  (*   forall (A B : Set) (p : F A) (q : F B), *)
+  (*     p *> q = (const id) <$> p <*> q. *)
+  (* Proof. reflexivity. Qed. *)
+End WithApplicative.
 
 Notation "pure[ M ]" := (@pure M _ _) (at level 19, M at next level).
 Notation "pure[ M N ]" := (@pure (fun X => M (N X)) _ _) (at level 9).
@@ -46,66 +52,53 @@ Notation "ap[ M ]" := (@ap M _ _ _) (at level 9).
 Notation "ap[ M N ]" := (@ap (fun X => M (N X)) _ _ _) (at level 9).
 Notation "ap[ M N O ]" := (@ap (fun X => M (N (O X))) _ _ _) (at level 9).
 
-Infix "<*>" := ap (at level 28, left associativity).
-(* Notation "x <**> f" := (ap f x) (at level 28, left associativity). *)
-(* Notation "x <**[ M ]> f" := (@ap M _ _ _ f x) (at level 28, left associativity). *)
-(* Infix "<*[ M ]>" := *)
-(*   (@ap M _ _ _) (at level 28, left associativity, only parsing). *)
-
-(* Notation "[| f x y .. z |]" := (.. (f <$> x <*> y) .. <*> z) *)
-(*     (at level 9, left associativity, f at level 9, *)
-(*      x at level 9, y at level 9, z at level 9). *)
-
-Definition liftA2 `{Applicative m} {A B C : Type}
-  (f : A -> B -> C) (x : m A) (y : m B) : m C := ap (fmap f x) y.
-
 Infix "*>" := (liftA2 (const id)) (at level 28, left associativity).
 Infix "<*" := (liftA2 const) (at level 28, left associativity).
 
-
-Lemma sequence_ap `{Applicative F} :
-  forall (A B : Type) (p : F A) (q : F B),
-    p *> q = (const id) <$> p <*> q.
-Proof. reflexivity. Qed.
+Infix "<*>" := ap (at level 28, left associativity).
 
 Module ApplicativeLaws.
 
 Import FunctorLaws.
 
-Class ApplicativeLaws (F : Type -> Type) {FIsApplicative : Applicative F} := {
+Class ApplicativeLaws (F : Set -> Set) {FIsApplicative : Applicative F} := {
   has_functor_laws :> FunctorLaws F;
 
-  ap_id : forall a : Type, ap (pure (@id a)) = id;
-  ap_comp : forall (a b c : Type) (v : F (a -> b)) (u : F (b -> c)) (w : F a),
+  ap_id : forall A : Set, ap (pure (@id A)) = id;
+  ap_comp : forall (A B C : Set) (v : F (A -> B)) (u : F (B -> C)) (w : F A),
     pure (fun f g x => f (g x)) <*> u <*> v <*> w = u <*> (v <*> w);
-  ap_homo : forall (a b : Type) (x : a) (f : a -> b),
+  ap_homo : forall (A B : Set) (x : A) (f : A -> B),
     pure f <*> pure x = pure (f x);
-  ap_interchange : forall (a b : Type) (y : a) (u : F (a -> b)),
+  ap_interchange : forall (A B : Set) (y : A) (u : F (A -> B)),
     u <*> pure y = pure (fun f => f y) <*> u;
 
-  ap_fmap : forall (a b : Type) (f : a -> b),
+  ap_fmap : forall (A B : Set) (f : A -> B),
     ap (pure f) = @fmap _ is_functor _ _ f
 }.
+Section WithApplicativeLaws.
+  Context (F : Set -> Set).
+  Context (HA : Applicative F).
+  Context (HAL : ApplicativeLaws F).
 
-Corollary fmap_pure `{ApplicativeLaws m} : forall (a b : Type) (f : a -> b),
-  fmap[m] f \o pure = pure \o f.
-Proof.
-  intros a b f.
-  extensionality x.
-  unfold Basics.compose.
-  rewrite <- ap_fmap.
-  apply ap_homo.
-Qed.
+  Corollary fmap_pure (A B : Set) :
+    forall (f : A -> B), fmap f ∘ pure = pure ∘ f.
+  Proof.
+    intros f.
+    extensionality x.
+    cbn.
+    rewrite <- ap_fmap.
+    apply ap_homo.
+  Qed.
 
-Corollary fmap_pure_x `{ApplicativeLaws m} : forall (a b : Type) (f : a -> b) x,
-  fmap[m] f (pure x) = pure (f x).
-Proof.
-  intros.
-  replace (pure[m] (f x)) with ((pure[m] \o f) x).
-    rewrite <- fmap_pure.
+  Corollary fmap_pure_x (A B : Set) :
+    forall (f : A -> B) (x : A), fmap f (pure x) = pure (f x).
+  Proof.
+    intros.
+    replace (pure (f x)) with ((pure ∘ f) x).
+    now rewrite <- fmap_pure.
     reflexivity.
-  reflexivity.
-Qed.
+  Qed.
+End WithApplicativeLaws.
 
 Ltac apply_applicative_laws :=
   repeat
@@ -148,24 +141,3 @@ Ltac apply_applicative_laws :=
     end; auto.
 
 End ApplicativeLaws.
-
-Reserved Notation "f <|> g" (at level 28, left associativity).
-
-Class Alternative (F : Type -> Type) :=
-{ alt_is_applicative :> Applicative F
-
-; empty : forall {X}, F X
-; choose : forall {X}, F X -> F X -> F X
-    where "f <|> g" := (choose f g)
-(* ; some : forall {X}, F X -> list (F X) *)
-(* ; many : forall {X}, F X -> list (F X) *)
-}.
-
-Notation "f <|> g" := (choose f g) (at level 28, left associativity).
-
-(* Module Import LN := ListNotations. *)
-
-(* Program Instance list_Alternative : Alternative list := { *)
-(*     empty := fun _ => []; *)
-(*     choose := app *)
-(* }. *)

@@ -1,4 +1,3 @@
-Require Import Hask.Control.Iso.
 Require Import Hask.Prelude.
 Require Import Data.Functor.
 Require Import Data.Either.
@@ -12,13 +11,12 @@ Require Import Coq.Setoids.Setoid.
 Require Import Coq.Classes.Morphisms.
 Require Import Hask.Control.Selective.Rigid.
 
-Set Universe Polymorphism.
-Generalizable All Variables.
-
-Import Selective.SelectiveParametricity.
+Section WithF.
+  Context {F : Set -> Set}.
+  Context {HF : Functor F}.
 
 Theorem free_theorem_1_MkSelect :
-  forall (A B C : Type) `{Functor F} (f : B -> C)
+  forall (A B C : Set) (f : B -> C)
          (x : Select F (A + B)%type)
          (y : F (A -> B)),
     f <$> (MkSelect x y) =
@@ -28,15 +26,13 @@ Proof.
   intros. simpl fmap. reflexivity.
 Qed.
 
-Theorem free_theorem_2_MkSelect `{Functor F} :
-  forall (A B C : Type) (f : A -> C) (x : Select F (A + B)) (y : F (C -> B)),
-    MkSelect (mapLeft f <$> x) y = MkSelect x (fmap (fun g : C -> B => g \o f) y).
-Admitted.
+Axiom free_theorem_2_MkSelect :
+  forall (A B C : Set) (f : A -> C) (x : Select F (A + B)) (y : F (C -> B)),
+    MkSelect (mapLeft f <$> x) y = MkSelect x (fmap (fun g : C -> B => g ∘ f) y).
 
-Theorem free_theorem_3_MkSelect `{Functor F} :
-  forall (A B C : Type) (f : C -> A -> B)
+Axiom free_theorem_3_MkSelect :
+  forall (A B C : Set) (f : C -> A -> B)
                    (x : Select F (A + B))
                    (y : F C),
     MkSelect x (f <$> y) = MkSelect (mapLeft (flip f) <$> x) (rev_f_ap <$> y).
-Proof.
-Admitted.
+End WithF.

@@ -3,9 +3,10 @@ Require Import Hask.Data.Functor.
 Require Import FunctionalExtensionality.
 
 Generalizable All Variables.
+Set Universe Polymorphism.
 
-Class Contravariant (f : Type -> Type) := {
-  contramap : forall {a b : Type}, (a -> b) -> f b -> f a
+Polymorphic Class Contravariant (f : Set -> Set) := {
+  contramap : forall {a b : Set}, (a -> b) -> f b -> f a
 }.
 
 Arguments contramap {f _ a b} _ x.
@@ -30,45 +31,26 @@ Instance Contravariant_Compose `{Functor F} `{Contravariant G} :
 
 Module ContravariantLaws.
 
-Include FunctorLaws.
+Import FunctorLaws.
 
-Class ContravariantLaws (f : Type -> Type) `{Contravariant f} := {
-  contramap_id   : forall a : Type, contramap (@id a) = id;
-  contramap_comp : forall (a b c : Type) (f : b -> c) (g : a -> b),
+Polymorphic Class ContravariantLaws (f : Set -> Set) `{Contravariant f} := {
+  contramap_id   : forall a : Set, contramap (@id a) = id;
+  contramap_comp : forall (a b c : Set) (f : b -> c) (g : a -> b),
     contramap g \o contramap f = contramap (f \o g)
 }.
 
 Corollary contramap_id_x `{ContravariantLaws f} :
-  forall (a : Type) x, contramap (@id a) x = x.
+  forall (a : Set) x, contramap (@id a) x = x.
 Proof. intros; rewrite contramap_id. auto. Qed.
 
 Corollary contramap_comp_x `{ContravariantLaws F} :
-  forall (a b c : Type) (f : b -> c) (g : a -> b) x,
+  forall (a b c : Set) (f : b -> c) (g : a -> b) x,
   contramap g (contramap f x) = contramap (fun y => f (g y)) x.
 Proof.
   intros.
   replace (fun y : a => f (g y)) with (f \o g).
     rewrite <- contramap_comp.
     reflexivity.
-  reflexivity.
-Qed.
-
-Corollary contramap_compose  `{Functor F} `{Contravariant G} :
-  forall {X Y} (f : X -> Y),
-    @fmap F _ (G Y) (G X) (@contramap G _ X Y f) =
-    @contramap (F \o G) _ X Y f.
-Proof. reflexivity. Qed.
-
-Program Instance ContravariantLaws_Compose
-  `{FunctorLaws F} `{ContravariantLaws G} : ContravariantLaws (F \o G).
-Obligation 1. (* contramap_id *)
-  extensionality x.
-  rewrite contramap_id, fmap_id.
-  reflexivity.
-Qed.
-Obligation 2. (* contramap_comp *)
-  extensionality x.
-  rewrite fmap_comp, contramap_comp.
   reflexivity.
 Qed.
 

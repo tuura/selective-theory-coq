@@ -1,6 +1,6 @@
 Generalizable All Variables.
 
-Class Monoid (m : Type) := {
+Class Monoid (m : Set) := {
   mempty : m;
   mappend : m -> m -> m;
 

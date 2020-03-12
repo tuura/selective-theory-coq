@@ -9,8 +9,8 @@ Local Open Scope program_scope.
 Set Universe Polymorphism.
 Generalizable All Variables.
 
-Polymorphic Class Bifunctor (F : Type -> Type -> Type) : Type := {
-  bimap : forall {A B C D : Type}, (A -> C) -> (B -> D) -> F A B -> F C D
+Polymorphic Class Bifunctor (F : Set -> Set -> Set) : Set := {
+  bimap : forall {A B C D : Set}, (A -> C) -> (B -> D) -> F A B -> F C D
 }.
 
 Arguments bimap {F _ A B C D} f g x.
@@ -18,7 +18,7 @@ Arguments bimap {F _ A B C D} f g x.
 Module BifunctorLaws.
 
 (* Lemma bimap_fmap_fuse_right : *)
-(*   forall (A B C D X : Type) (F : Type -> Type -> Type) *)
+(*   forall (A B C D X : Set) (F : Set -> Set -> Set) *)
 (*   `(Bifunctor F) `(Functor (F X)) *)
 (*   (f : A -> C) (g : B -> D) (h : X -> B), *)
 (*   bimap f g ∘ fmap[ F X ] h = bimap f (g ∘ h). *)
@@ -29,7 +29,7 @@ Module BifunctorLaws.
 (* Qed. *)
 
 Lemma Either_bimap_mapLeft_fuse :
-  forall (A B C D X : Type)
+  forall (A B C D X : Set)
          (f : B -> C) (g : B -> D) (h : C -> X),
   mapLeft h ∘ Either_bimap f g = Either_bimap (h ∘ f) g.
 Proof.
@@ -51,13 +51,13 @@ Qed.
 (*   apply H0. *)
 (* Qed. *)
 
-(* Class FunctorLaws (f : Type -> Type) `{Functor f} := { *)
-(*   fmap_id   : forall a : Type, fmap (@id a) = id; *)
-(*   fmap_comp : forall (a b c : Type) (f : b -> c) (g : a -> b), *)
+(* Class FunctorLaws (f : Set -> Set) `{Functor f} := { *)
+(*   fmap_id   : forall a : Set, fmap (@id a) = id; *)
+(*   fmap_comp : forall (a b c : Set) (f : b -> c) (g : a -> b), *)
 (*     fmap f \o fmap g = fmap (f \o g) *)
 (* }. *)
 
-(* Corollary fmap_id_x `{FunctorLaws f} : forall (a : Type) x, fmap (@id a) x = x. *)
+(* Corollary fmap_id_x `{FunctorLaws f} : forall (a : Set) x, fmap (@id a) x = x. *)
 (* Proof. *)
 (*   intros. *)
 (*   rewrite fmap_id. *)
@@ -65,7 +65,7 @@ Qed.
 (* Qed. *)
 
 (* Corollary fmap_comp_x `{FunctorLaws F} : *)
-(*   forall (a b c : Type) (f : b -> c) (g : a -> b) x, *)
+(*   forall (a b c : Set) (f : b -> c) (g : a -> b) x, *)
 (*   fmap f (fmap g x) = fmap (fun y => f (g y)) x. *)
 (* Proof. *)
 (*   intros. *)
